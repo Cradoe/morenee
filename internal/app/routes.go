@@ -13,11 +13,12 @@ func (app *Application) routes() http.Handler {
 	middlewareRepo := middleware.New(app.errorHandler, app.Logger, app.DB, &app.Config)
 	userHandler := handler.NewUserHandler(app.DB)
 	healthHandler := handler.NewHealthCheckHandler(app.errorHandler)
-	authHandler := handler.NewAuthHandler(app.DB, app.errorHandler)
+	authHandler := handler.NewAuthHandler(app.DB, &app.Config, app.errorHandler)
 
 	mux.HandleFunc("GET /health", healthHandler.HandleHealthCheck)
 	mux.HandleFunc("POST /users", userHandler.HandleUsersCreate)
 
 	mux.HandleFunc("POST /auth/register", authHandler.HandleAuthRegister)
+	mux.HandleFunc("POST /auth/login", authHandler.HandleAuthLogin)
 	return middlewareRepo.LogAccess(middlewareRepo.RecoverPanic(middlewareRepo.Authenticate(mux)))
 }

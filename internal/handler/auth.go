@@ -2,24 +2,32 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
+	"time"
 
+	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/errHandler"
-	"github.com/cradoe/morenee/internal/password"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
 	"github.com/cradoe/morenee/internal/validator"
+
+	"github.com/cradoe/gopass"
+
+	"github.com/pascaldekloe/jwt"
 )
 
 type authHandler struct {
 	db         *database.DB
+	config     *config.Config
 	errHandler *errHandler.ErrorRepository
 }
 
-func NewAuthHandler(db *database.DB, errHandler *errHandler.ErrorRepository) *authHandler {
+func NewAuthHandler(db *database.DB, config *config.Config, errHandler *errHandler.ErrorRepository) *authHandler {
 	return &authHandler{
 		db:         db,
 		errHandler: errHandler,
+		config:     config,
 	}
 }
 
@@ -53,7 +61,7 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	input.Validator.CheckField(input.Password != "", "Password", "Password is required")
 	input.Validator.CheckField(len(input.Password) >= 8, "Password", "Password is too short")
 	input.Validator.CheckField(len(input.Password) <= 72, "Password", "Password is too long")
-	input.Validator.CheckField(validator.NotIn(input.Password, password.CommonPasswords...), "Password", "Password is too common")
+	input.Validator.CheckField(gopass.IsCommon(&input.Password), "Password", "Password is too common")
 
 	input.Validator.CheckField(input.FirstName != "", "FirstName", "FirstName is required")
 	input.Validator.CheckField(len(input.FirstName) >= 3, "FirstName", "FirstName is too short")
@@ -71,7 +79,7 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	hashedPassword, err := password.Hash(input.Password)
+	hashedPassword, err := gopass.Hash(input.Password)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
@@ -94,6 +102,73 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 
 	message := "Account created successfully"
 	err = response.JSONCreatedResponse(w, nil, message)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+	}
+
+}
+
+func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email     string              `json:"email"`
+		Password  string              `json:"password"`
+		Validator validator.Validator `json:"-"`
+	}
+
+	err := request.DecodeJSON(w, r, &input)
+	if err != nil {
+		h.errHandler.BadRequest(w, r, err)
+		return
+	}
+
+	user, found, err := h.db.GetUserByEmail(input.Email)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	input.Validator.CheckField(input.Email != "", "Email", "Email is required")
+	input.Validator.CheckField(found, "Email", "Email address could not be found")
+
+	if found {
+		passwordMatches, err := gopass.Matches(input.Password, user.HashedPassword)
+		if err != nil {
+			h.errHandler.ServerError(w, r, err)
+			return
+		}
+
+		input.Validator.CheckField(input.Password != "", "Password", "Password is required")
+		input.Validator.CheckField(passwordMatches, "Password", "Password is incorrect")
+	}
+
+	if input.Validator.HasErrors() {
+		h.errHandler.FailedValidation(w, r, input.Validator)
+		return
+	}
+
+	var claims jwt.Claims
+	claims.Subject = strconv.Itoa(user.ID)
+
+	expiry := time.Now().Add(24 * time.Hour)
+	claims.Issued = jwt.NewNumericTime(time.Now())
+	claims.NotBefore = jwt.NewNumericTime(time.Now())
+	claims.Expires = jwt.NewNumericTime(expiry)
+
+	claims.Issuer = h.config.BaseURL
+	claims.Audiences = []string{h.config.BaseURL}
+
+	jwtBytes, err := claims.HMACSign(jwt.HS256, []byte(h.config.Jwt.SecretKey))
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	data := map[string]string{
+		"auth_token":   string(jwtBytes),
+		"token_expiry": expiry.Format(time.RFC3339),
+	}
+	message := "Login succesful"
+	err = response.JSONOkResponse(w, data, message, nil)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 	}
