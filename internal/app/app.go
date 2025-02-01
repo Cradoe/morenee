@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/cradoe/gotemp/internal/config"
-	"github.com/cradoe/gotemp/internal/database"
-	"github.com/cradoe/gotemp/internal/env"
-	"github.com/cradoe/gotemp/internal/errHandler"
-	"github.com/cradoe/gotemp/internal/helper"
-	"github.com/cradoe/gotemp/internal/smtp"
+	"github.com/cradoe/moremonee/internal/config"
+	"github.com/cradoe/moremonee/internal/database"
+	"github.com/cradoe/moremonee/internal/env"
+	"github.com/cradoe/moremonee/internal/errHandler"
+	"github.com/cradoe/moremonee/internal/helper"
+	"github.com/cradoe/moremonee/internal/smtp"
 	"github.com/joho/godotenv"
 )
 

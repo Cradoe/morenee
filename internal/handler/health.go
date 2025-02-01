@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/cradoe/gotemp/internal/errHandler"
-	"github.com/cradoe/gotemp/internal/response"
+	"github.com/cradoe/moremonee/internal/errHandler"
+	"github.com/cradoe/moremonee/internal/response"
 )
 
 type healthCheckHandler struct {
@@ -17,11 +17,9 @@ func NewHealthCheckHandler(err *errHandler.ErrorRepository) *healthCheckHandler 
 	}
 }
 func (app *healthCheckHandler) HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
-	data := map[string]string{
-		"Status": "OK",
-	}
+	message := "Up and grateful"
 
-	err := response.JSON(w, http.StatusOK, data)
+	err := response.JSONOkResponse(w, nil, message, nil)
 	if err != nil {
 		app.err.ServerError(w, r, err)
 	}

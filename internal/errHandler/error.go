@@ -8,10 +8,10 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/cradoe/gotemp/internal/helper"
-	"github.com/cradoe/gotemp/internal/response"
-	"github.com/cradoe/gotemp/internal/smtp"
-	"github.com/cradoe/gotemp/internal/validator"
+	"github.com/cradoe/moremonee/internal/helper"
+	"github.com/cradoe/moremonee/internal/response"
+	"github.com/cradoe/moremonee/internal/smtp"
+	"github.com/cradoe/moremonee/internal/validator"
 )
 
 type ErrorRepository struct {
@@ -21,7 +21,6 @@ type ErrorRepository struct {
 	mailer            *smtp.Mailer
 }
 
-// NewErrorRepository initializes a new ErrorRepository
 func NewErrorRepository(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger, help *helper.HelperRepository) *ErrorRepository {
 	return &ErrorRepository{
 		notificationEmail: notificationEmail,
@@ -57,53 +56,103 @@ func (e *ErrorRepository) ReportServerError(r *http.Request, err error) {
 	}
 }
 
-func (e *ErrorRepository) ErrorMessage(w http.ResponseWriter, r *http.Request, status int, message string, headers http.Header) {
-	message = strings.ToUpper(message[:1]) + message[1:]
+type Error struct {
+	w       http.ResponseWriter
+	r       *http.Request
+	v       any
+	status  int
+	message string
+	headers http.Header
+}
 
-	err := response.JSONWithHeaders(w, status, map[string]string{"Error": message}, headers)
+func (e *ErrorRepository) ErrorMessage(d *Error) {
+	d.message = strings.ToUpper(d.message[:1]) + d.message[1:]
+
+	err := response.JSONErrorResponse(d.w, d.v, d.message, d.status, d.headers)
 	if err != nil {
-		e.ReportServerError(r, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		e.ReportServerError(d.r, err)
+		d.w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
-func (app *ErrorRepository) ServerError(w http.ResponseWriter, r *http.Request, err error) {
-	app.ReportServerError(r, err)
+func (e *ErrorRepository) ServerError(w http.ResponseWriter, r *http.Request, err error) {
+	e.ReportServerError(r, err)
 
 	message := "The server encountered a problem and could not process your request"
-	app.ErrorMessage(w, r, http.StatusInternalServerError, message, nil)
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusInternalServerError,
+		message: message,
+		headers: nil,
+	})
 }
 
 func (e *ErrorRepository) NotFound(w http.ResponseWriter, r *http.Request) {
 	message := "The requested resource could not be found"
-	e.ErrorMessage(w, r, http.StatusNotFound, message, nil)
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusNotFound,
+		message: message,
+		headers: nil,
+	})
 }
 
 func (e *ErrorRepository) MethodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	message := fmt.Sprintf("The %s method is not supported for this resource", r.Method)
-	e.ErrorMessage(w, r, http.StatusMethodNotAllowed, message, nil)
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusMethodNotAllowed,
+		message: message,
+		headers: nil,
+	})
 }
 
 func (e *ErrorRepository) BadRequest(w http.ResponseWriter, r *http.Request, err error) {
-	e.ErrorMessage(w, r, http.StatusBadRequest, err.Error(), nil)
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusBadRequest,
+		message: err.Error(),
+		headers: nil,
+	})
 }
 
 func (e *ErrorRepository) FailedValidation(w http.ResponseWriter, r *http.Request, v validator.Validator) {
-	err := response.JSON(w, http.StatusUnprocessableEntity, v)
-	if err != nil {
-		e.ServerError(w, r, err)
-	}
+	message := "Validation failed"
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusUnprocessableEntity,
+		message: message,
+		headers: nil,
+	})
 }
 
 func (e *ErrorRepository) InvalidAuthenticationToken(w http.ResponseWriter, r *http.Request) {
 	headers := make(http.Header)
 	headers.Set("WWW-Authenticate", "Bearer")
 
-	e.ErrorMessage(w, r, http.StatusUnauthorized, "Invalid authentication token", headers)
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusUnauthorized,
+		message: "Invalid authentication token",
+		headers: headers,
+	})
 }
 
 func (e *ErrorRepository) AuthenticationRequired(w http.ResponseWriter, r *http.Request) {
-	e.ErrorMessage(w, r, http.StatusUnauthorized, "You must be authenticated to access this resource", nil)
+	message := "You must be authenticated to access this resource"
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusUnauthorized,
+		message: message,
+		headers: nil,
+	})
 }
 
 func (e *ErrorRepository) BasicAuthenticationRequired(w http.ResponseWriter, r *http.Request) {
@@ -111,5 +160,11 @@ func (e *ErrorRepository) BasicAuthenticationRequired(w http.ResponseWriter, r *
 	headers.Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
 
 	message := "You must be authenticated to access this resource"
-	e.ErrorMessage(w, r, http.StatusUnauthorized, message, headers)
+	e.ErrorMessage(&Error{
+		w:       w,
+		r:       r,
+		status:  http.StatusUnauthorized,
+		message: message,
+		headers: headers,
+	})
 }

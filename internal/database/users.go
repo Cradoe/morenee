@@ -9,23 +9,37 @@ import (
 
 type User struct {
 	ID             int       `db:"id"`
-	Created        time.Time `db:"created"`
+	FirstName      string    `db:"first_name"`
+	LastName       string    `db:"last_name"`
+	PhoneNumber    string    `db:"phone_number"`
+	Gender         string    `db:"gender"`
 	Email          string    `db:"email"`
+	Status         string    `db:"status"`
+	CreatedAt      time.Time `db:"created_at"`
+	DeletedAt      time.Time `db:"deleted_at"`
+	VerifiedAt     time.Time `db:"verified_at"`
 	HashedPassword string    `db:"hashed_password"`
 }
 
-func (db *DB) InsertUser(email, hashedPassword string) (int, error) {
+func (db *DB) InsertUser(user *User) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	var id int
 
 	query := `
-		INSERT INTO users (created, email, hashed_password)
-		VALUES ($1, $2, $3)
+		INSERT INTO users (first_name, last_name, phone_number, gender, email, hashed_password)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id`
 
-	err := db.GetContext(ctx, &id, query, time.Now(), email, hashedPassword)
+	err := db.GetContext(ctx, &id, query,
+		user.FirstName,
+		user.LastName,
+		user.PhoneNumber,
+		user.Gender,
+		user.Email,
+		user.HashedPassword)
+
 	if err != nil {
 		return 0, err
 	}
