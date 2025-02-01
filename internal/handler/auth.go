@@ -58,10 +58,12 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	input.Validator.CheckField(validator.Matches(input.Email, validator.RgxEmail), "Email", "Must be a valid email address")
 	input.Validator.CheckField(!found, "Email", "Email is already in use")
 
-	input.Validator.CheckField(input.Password != "", "Password", "Password is required")
-	input.Validator.CheckField(len(input.Password) >= 8, "Password", "Password is too short")
-	input.Validator.CheckField(len(input.Password) <= 72, "Password", "Password is too long")
-	input.Validator.CheckField(gopass.IsCommon(&input.Password), "Password", "Password is too common")
+	ok, errs := gopass.Validate(input.Password)
+
+	if !ok {
+		h.errHandler.FailedValidation(w, r, errs)
+		return
+	}
 
 	input.Validator.CheckField(input.FirstName != "", "FirstName", "FirstName is required")
 	input.Validator.CheckField(len(input.FirstName) >= 3, "FirstName", "FirstName is too short")
@@ -75,7 +77,7 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	input.Validator.CheckField(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "PhoneNumber", "Must be a valid phone number")
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator)
+		h.errHandler.FailedValidation(w, r, input.Validator.FieldErrors)
 		return
 	}
 

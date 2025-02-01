@@ -6,6 +6,10 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/cradoe/gopass v1.1.0 h1:3V6/WVWjKmygOK3svrpZYKLrk+PshE+dR69115l+WPM=
 github.com/cradoe/gopass v1.1.0/go.mod h1:13hvfUVjzJ0lxTP6ULLRqu1DvsMSDBsuEFpoe9E1AY4=
+github.com/cradoe/gopass v1.1.1 h1:zNmSQYPTr3C4Hvh8hxOhCX+Acz3BSRQe2v+yccsw0ao=
+github.com/cradoe/gopass v1.1.1/go.mod h1:13hvfUVjzJ0lxTP6ULLRqu1DvsMSDBsuEFpoe9E1AY4=
+github.com/cradoe/gopass v1.1.2 h1:r9evUwowHI2GrGAbWJSUxJydu2UDY1nvdFKkV+J8nfA=
+github.com/cradoe/gopass v1.1.2/go.mod h1:13hvfUVjzJ0lxTP6ULLRqu1DvsMSDBsuEFpoe9E1AY4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

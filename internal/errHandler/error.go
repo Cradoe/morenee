@@ -11,7 +11,6 @@ import (
 	"github.com/cradoe/morenee/internal/helper"
 	"github.com/cradoe/morenee/internal/response"
 	"github.com/cradoe/morenee/internal/smtp"
-	"github.com/cradoe/morenee/internal/validator"
 )
 
 type ErrorRepository struct {
@@ -120,7 +119,7 @@ func (e *ErrorRepository) BadRequest(w http.ResponseWriter, r *http.Request, err
 	})
 }
 
-func (e *ErrorRepository) FailedValidation(w http.ResponseWriter, r *http.Request, v validator.Validator) {
+func (e *ErrorRepository) FailedValidation(w http.ResponseWriter, r *http.Request, v any) {
 	message := "Validation failed"
 
 	e.ErrorMessage(&Error{
@@ -129,7 +128,7 @@ func (e *ErrorRepository) FailedValidation(w http.ResponseWriter, r *http.Reques
 		status:  http.StatusUnprocessableEntity,
 		message: message,
 		headers: nil,
-		errors:  v.FieldErrors,
+		errors:  v,
 	})
 }
 

@@ -3,7 +3,7 @@ module github.com/cradoe/morenee
 go 1.23.5
 
 require (
-	github.com/cradoe/gopass v1.1.0
+	github.com/cradoe/gopass v1.1.2
 	github.com/golang-migrate/migrate/v4 v4.18.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
