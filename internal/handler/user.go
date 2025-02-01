@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/cradoe/moremonee/internal/database"
-	"github.com/cradoe/moremonee/internal/request"
-	"github.com/cradoe/moremonee/internal/validator"
+	"github.com/cradoe/gotemp/internal/database"
+	"github.com/cradoe/gotemp/internal/request"
+	"github.com/cradoe/gotemp/internal/validator"
 )
 
 // userHandler handles user-related requests

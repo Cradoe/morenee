@@ -8,17 +8,17 @@ import (
 )
 
 type User struct {
-	ID             int       `db:"id"`
-	FirstName      string    `db:"first_name"`
-	LastName       string    `db:"last_name"`
-	PhoneNumber    string    `db:"phone_number"`
-	Gender         string    `db:"gender"`
-	Email          string    `db:"email"`
-	Status         string    `db:"status"`
-	CreatedAt      time.Time `db:"created_at"`
-	DeletedAt      time.Time `db:"deleted_at"`
-	VerifiedAt     time.Time `db:"verified_at"`
-	HashedPassword string    `db:"hashed_password"`
+	ID             int          `db:"id"`
+	FirstName      string       `db:"first_name"`
+	LastName       string       `db:"last_name"`
+	PhoneNumber    string       `db:"phone_number"`
+	Gender         string       `db:"gender"`
+	Email          string       `db:"email"`
+	Status         string       `db:"status"`
+	CreatedAt      time.Time    `db:"created_at"`
+	DeletedAt      sql.NullTime `db:"deleted_at"`
+	VerifiedAt     sql.NullTime `db:"verified_at"`
+	HashedPassword string       `db:"hashed_password"`
 }
 
 func (db *DB) InsertUser(user *User) (int, error) {

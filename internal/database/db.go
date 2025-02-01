@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/cradoe/moremonee/assets"
+	"github.com/cradoe/gotemp/assets"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -36,18 +36,19 @@ func New(dsn string, automigrate bool) (*DB, error) {
 	db.SetConnMaxLifetime(2 * time.Hour)
 
 	if automigrate {
-
 		iofsDriver, err := iofs.New(assets.EmbeddedFiles, "migrations")
 		if err != nil {
 			return nil, err
 		}
 
 		migrator, err := migrate.NewWithSourceInstance("iofs", iofsDriver, "postgres://"+dsn)
+
 		if err != nil {
 			return nil, err
 		}
 
 		err = migrator.Up()
+
 		switch {
 		case errors.Is(err, migrate.ErrNoChange):
 			break

@@ -1,4 +1,4 @@
-module github.com/cradoe/moremonee
+module github.com/cradoe/gotemp
 
 go 1.23.0
 

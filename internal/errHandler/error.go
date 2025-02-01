@@ -8,10 +8,10 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/cradoe/moremonee/internal/helper"
-	"github.com/cradoe/moremonee/internal/response"
-	"github.com/cradoe/moremonee/internal/smtp"
-	"github.com/cradoe/moremonee/internal/validator"
+	"github.com/cradoe/gotemp/internal/helper"
+	"github.com/cradoe/gotemp/internal/response"
+	"github.com/cradoe/gotemp/internal/smtp"
+	"github.com/cradoe/gotemp/internal/validator"
 )
 
 type ErrorRepository struct {
@@ -59,7 +59,7 @@ func (e *ErrorRepository) ReportServerError(r *http.Request, err error) {
 type Error struct {
 	w       http.ResponseWriter
 	r       *http.Request
-	v       any
+	errors  any
 	status  int
 	message string
 	headers http.Header
@@ -68,7 +68,7 @@ type Error struct {
 func (e *ErrorRepository) ErrorMessage(d *Error) {
 	d.message = strings.ToUpper(d.message[:1]) + d.message[1:]
 
-	err := response.JSONErrorResponse(d.w, d.v, d.message, d.status, d.headers)
+	err := response.JSONErrorResponse(d.w, d.errors, d.message, d.status, d.headers)
 	if err != nil {
 		e.ReportServerError(d.r, err)
 		d.w.WriteHeader(http.StatusInternalServerError)
@@ -122,12 +122,14 @@ func (e *ErrorRepository) BadRequest(w http.ResponseWriter, r *http.Request, err
 
 func (e *ErrorRepository) FailedValidation(w http.ResponseWriter, r *http.Request, v validator.Validator) {
 	message := "Validation failed"
+
 	e.ErrorMessage(&Error{
 		w:       w,
 		r:       r,
 		status:  http.StatusUnprocessableEntity,
 		message: message,
 		headers: nil,
+		errors:  v.FieldErrors,
 	})
 }
 

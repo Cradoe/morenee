@@ -13,6 +13,21 @@ type Response[T any] struct {
 	Error   T      `json:"error,omitempty"`
 }
 
+func JSONCreatedResponse(w http.ResponseWriter, data any, message string) error {
+	if message == "" {
+		message = "Request successful"
+	}
+
+	response := &Response[any]{
+		Status:  http.StatusCreated,
+		Success: true,
+		Message: message,
+		Data:    data,
+	}
+
+	return JSONWithHeaders(w, response, nil)
+}
+
 func JSONOkResponse(w http.ResponseWriter, data any, message string, headers http.Header) error {
 	if message == "" {
 		message = "Request successful"
@@ -29,6 +44,7 @@ func JSONOkResponse(w http.ResponseWriter, data any, message string, headers htt
 }
 
 func JSONErrorResponse(w http.ResponseWriter, err any, message string, status int, headers http.Header) error {
+	// log.Println("errerr", err)
 	if message == "" {
 		message = "Request failed"
 	}

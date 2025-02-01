@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/cradoe/moremonee/internal/errHandler"
-	"github.com/cradoe/moremonee/internal/response"
+	"github.com/cradoe/gotemp/internal/errHandler"
+	"github.com/cradoe/gotemp/internal/response"
 )
 
 type healthCheckHandler struct {

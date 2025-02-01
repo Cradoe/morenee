@@ -3,8 +3,8 @@ package app
 import (
 	"net/http"
 
-	"github.com/cradoe/moremonee/internal/handler"
-	"github.com/cradoe/moremonee/internal/middleware"
+	"github.com/cradoe/gotemp/internal/handler"
+	"github.com/cradoe/gotemp/internal/middleware"
 )
 
 func (app *Application) routes() http.Handler {
