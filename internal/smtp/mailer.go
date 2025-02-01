@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/cradoe/gotemp/assets"
-	"github.com/cradoe/gotemp/internal/funcs"
+	"github.com/cradoe/morenee/assets"
+	"github.com/cradoe/morenee/internal/funcs"
 
 	"github.com/wneessen/go-mail"
 

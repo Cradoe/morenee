@@ -3,12 +3,12 @@ package handler
 import (
 	"net/http"
 
-	"github.com/cradoe/gotemp/internal/database"
-	"github.com/cradoe/gotemp/internal/errHandler"
-	"github.com/cradoe/gotemp/internal/password"
-	"github.com/cradoe/gotemp/internal/request"
-	"github.com/cradoe/gotemp/internal/response"
-	"github.com/cradoe/gotemp/internal/validator"
+	"github.com/cradoe/morenee/internal/database"
+	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/password"
+	"github.com/cradoe/morenee/internal/request"
+	"github.com/cradoe/morenee/internal/response"
+	"github.com/cradoe/morenee/internal/validator"
 )
 
 type authHandler struct {

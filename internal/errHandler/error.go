@@ -8,10 +8,10 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/cradoe/gotemp/internal/helper"
-	"github.com/cradoe/gotemp/internal/response"
-	"github.com/cradoe/gotemp/internal/smtp"
-	"github.com/cradoe/gotemp/internal/validator"
+	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/response"
+	"github.com/cradoe/morenee/internal/smtp"
+	"github.com/cradoe/morenee/internal/validator"
 )
 
 type ErrorRepository struct {

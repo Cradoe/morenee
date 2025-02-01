@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cradoe/gotemp/internal/config"
-	"github.com/cradoe/gotemp/internal/context"
-	"github.com/cradoe/gotemp/internal/database"
-	"github.com/cradoe/gotemp/internal/errHandler"
-	"github.com/cradoe/gotemp/internal/response"
+	"github.com/cradoe/morenee/internal/config"
+	"github.com/cradoe/morenee/internal/context"
+	"github.com/cradoe/morenee/internal/database"
+	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/response"
 
 	"github.com/pascaldekloe/jwt"
 	"github.com/tomasen/realip"

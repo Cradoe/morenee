@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cradoe/gotemp/internal/database"
+	"github.com/cradoe/morenee/internal/database"
 )
 
 type contextKey string

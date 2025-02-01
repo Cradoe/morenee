@@ -7,8 +7,8 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/cradoe/gotemp/internal/app"
-	"github.com/cradoe/gotemp/internal/version"
+	"github.com/cradoe/morenee/internal/app"
+	"github.com/cradoe/morenee/internal/version"
 )
 
 func main() {

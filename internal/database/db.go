@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/cradoe/gotemp/assets"
+	"github.com/cradoe/morenee/assets"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/source/iofs"

@@ -630,6 +630,6 @@ Important: The version control system revision number will only be available aft
 
 ## Changing the module path
 
-The module path is currently set to `github.com/cradoe/gotemp`. If you want to change this please find and replace all instances of `github.com/cradoe/gotemp` in the codebase with your own module path.
+The module path is currently set to `github.com/cradoe/morenee`. If you want to change this please find and replace all instances of `github.com/cradoe/morenee` in the codebase with your own module path.
 
 <!-- pg_ctl -D /opt/homebrew/var/postgresql start -->
