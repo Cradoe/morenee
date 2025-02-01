@@ -25,8 +25,7 @@ type Middleware struct {
 	config     *config.Config
 }
 
-// NewMiddleware initializes a new Middleware
-func NewMiddleware(errHandler *errHandler.ErrorRepository, logger *slog.Logger, db *database.DB, config *config.Config) *Middleware {
+func New(errHandler *errHandler.ErrorRepository, logger *slog.Logger, db *database.DB, config *config.Config) *Middleware {
 	return &Middleware{
 		errHandler: errHandler,
 		logger:     logger,
@@ -68,7 +67,6 @@ func (mid *Middleware) LogAccess(next http.Handler) http.Handler {
 	})
 }
 
-// TODO:: create auth middleware package
 func (mid *Middleware) Authenticate(next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Authorization")

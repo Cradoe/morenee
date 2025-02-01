@@ -10,7 +10,7 @@ type HelperRepository struct {
 	WG      *sync.WaitGroup
 }
 
-func NewHelperRepository(baseUrl *string) *HelperRepository {
+func New(baseUrl *string) *HelperRepository {
 	return &HelperRepository{
 		baseUrl: baseUrl,
 	}

@@ -21,7 +21,7 @@ type ErrorRepository struct {
 	mailer            *smtp.Mailer
 }
 
-func NewErrorRepository(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger, help *helper.HelperRepository) *ErrorRepository {
+func New(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger, help *helper.HelperRepository) *ErrorRepository {
 	return &ErrorRepository{
 		notificationEmail: notificationEmail,
 		logger:            logger,

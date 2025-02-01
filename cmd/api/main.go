@@ -37,6 +37,5 @@ func run(logger *slog.Logger) error {
 	}
 	defer application.DB.Close()
 
-	// Start HTTP server
 	return application.ServeHTTP()
 }

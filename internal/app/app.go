@@ -24,9 +24,7 @@ type Application struct {
 	helper       *helper.HelperRepository
 }
 
-// NewApplication initializes a new Application instance
 func NewApplication(logger *slog.Logger) (*Application, error) {
-	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		logger.Error("Error loading .env file", "error", err)
 	}
@@ -45,27 +43,25 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 	cfg.Smtp.Password = env.GetString("SMTP_PASSWORD", "pa55word")
 	cfg.Smtp.From = env.GetString("SMTP_FROM", "Example Name <no_reply@example.org>")
 
-	// Initialize Database
 	db, err := database.New(cfg.Db.Dsn, cfg.Db.Automigrate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	// Initialize Mailer
 	mailer, err := smtp.NewMailer(cfg.Smtp.Host, cfg.Smtp.Port, cfg.Smtp.Username, cfg.Smtp.Password, cfg.Smtp.From)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mailer: %w", err)
 	}
 
-	helperRepository := helper.NewHelperRepository(&cfg.BaseURL)
-	errorRepository := errHandler.NewErrorRepository(cfg.Notifications.Email, mailer, logger, helperRepository)
+	helper := helper.New(&cfg.BaseURL)
+	errorHandler := errHandler.New(cfg.Notifications.Email, mailer, logger, helper)
 	app := &Application{
 		Config:       cfg,
 		DB:           db,
 		Logger:       logger,
 		Mailer:       mailer,
-		errorHandler: errorRepository,
-		helper:       helperRepository,
+		errorHandler: errorHandler,
+		helper:       helper,
 	}
 
 	return app, nil
