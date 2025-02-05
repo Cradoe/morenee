@@ -21,30 +21,43 @@ type User struct {
 	HashedPassword string       `db:"hashed_password"`
 }
 
-func (db *DB) InsertUser(user *User) (int, error) {
+func (db *DB) InsertUser(user *User, tx *sql.Tx) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	var id int
-
 	query := `
 		INSERT INTO users (first_name, last_name, phone_number, gender, email, hashed_password)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id`
 
-	err := db.GetContext(ctx, &id, query,
-		user.FirstName,
-		user.LastName,
-		user.PhoneNumber,
-		user.Gender,
-		user.Email,
-		user.HashedPassword)
-
-	if err != nil {
-		return 0, err
+	if tx != nil {
+		err := tx.QueryRowContext(ctx, query,
+			user.FirstName,
+			user.LastName,
+			user.PhoneNumber,
+			user.Gender,
+			user.Email,
+			user.HashedPassword,
+		).Scan(&id)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		err := db.GetContext(ctx, &id, query,
+			user.FirstName,
+			user.LastName,
+			user.PhoneNumber,
+			user.Gender,
+			user.Email,
+			user.HashedPassword,
+		)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return id, err
+	return id, nil
 }
 
 func (db *DB) GetUser(id int) (*User, bool, error) {

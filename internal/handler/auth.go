@@ -13,7 +13,6 @@ import (
 	"github.com/cradoe/morenee/internal/validator"
 
 	"github.com/cradoe/gopass"
-
 	"github.com/pascaldekloe/jwt"
 )
 
@@ -54,9 +53,9 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	input.Validator.CheckField(input.Email != "", "Email", "Email is required")
-	input.Validator.CheckField(validator.Matches(input.Email, validator.RgxEmail), "Email", "Must be a valid email address")
-	input.Validator.CheckField(!found, "Email", "Email is already in use")
+	input.Validator.Check(input.Email != "", "Email is required")
+	input.Validator.Check(validator.Matches(input.Email, validator.RgxEmail), "Must be a valid email address")
+	input.Validator.Check(!found, "Email is already in use")
 
 	ok, errs := gopass.Validate(input.Password)
 
@@ -65,19 +64,19 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	input.Validator.CheckField(input.FirstName != "", "FirstName", "FirstName is required")
-	input.Validator.CheckField(len(input.FirstName) >= 3, "FirstName", "FirstName is too short")
+	input.Validator.Check(input.FirstName != "", "First name is required")
+	input.Validator.Check(len(input.FirstName) >= 3, "First name is too short")
 
-	input.Validator.CheckField(input.LastName != "", "LastName", "LastName is required")
-	input.Validator.CheckField(len(input.LastName) >= 3, "LastName", "LastName is too short")
+	input.Validator.Check(input.LastName != "", "Last name is required")
+	input.Validator.Check(len(input.LastName) >= 3, "Last name is too short")
 
-	input.Validator.CheckField(input.Gender != "", "Gender", "Gender is required")
+	input.Validator.Check(input.Gender != "", "Gender is required")
 
-	input.Validator.CheckField(input.PhoneNumber != "", "PhoneNumber", "PhoneNumber is required")
-	input.Validator.CheckField(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "PhoneNumber", "Must be a valid phone number")
+	input.Validator.Check(input.PhoneNumber != "", "Phone number is required")
+	input.Validator.Check(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "Must be a valid phone number")
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator.FieldErrors)
+		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
@@ -86,6 +85,17 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
 	newUser := &database.User{
 		FirstName:      input.FirstName,
@@ -96,13 +106,32 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		HashedPassword: hashedPassword,
 	}
 
-	_, err = h.db.InsertUser(newUser)
+	userID, err := h.db.InsertUser(newUser, tx)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
 
+	// call the NewWalletHandler constructor and
+	// then generate  a wallet for the created user
+	walletHandler := NewWalletHandler(h.db)
+	_, err = walletHandler.generateWallet(userID, tx)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	// NB:: other operations that we could do include:
+	// sending account activation email
+	// but we are just going to skip that and focus on the core implementation of the system
+
 	message := "Account created successfully"
+
 	err = response.JSONCreatedResponse(w, nil, message)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
@@ -129,22 +158,22 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Validator.CheckField(input.Email != "", "Email", "Email is required")
-	input.Validator.CheckField(found, "Email", "Email address could not be found")
+	input.Validator.Check(input.Email != "", "Email is required")
+	input.Validator.Check(found, "Email address could not be found")
 
 	if found {
-		passwordMatches, err := gopass.Matches(input.Password, user.HashedPassword)
+		passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
 		if err != nil {
 			h.errHandler.ServerError(w, r, err)
 			return
 		}
 
-		input.Validator.CheckField(input.Password != "", "Password", "Password is required")
-		input.Validator.CheckField(passwordMatches, "Password", "Password is incorrect")
+		input.Validator.Check(input.Password != "", "Password is required")
+		input.Validator.Check(passwordMatches, "Password is incorrect")
 	}
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator)
+		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 

@@ -44,7 +44,6 @@ func JSONOkResponse(w http.ResponseWriter, data any, message string, headers htt
 }
 
 func JSONErrorResponse(w http.ResponseWriter, err any, message string, status int, headers http.Header) error {
-	// log.Println("errerr", err)
 	if message == "" {
 		message = "Request failed"
 	}
