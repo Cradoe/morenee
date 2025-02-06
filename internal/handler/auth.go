@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -73,7 +74,15 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	input.Validator.Check(input.Gender != "", "Gender is required")
 
 	input.Validator.Check(input.PhoneNumber != "", "Phone number is required")
-	input.Validator.Check(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "Must be a valid phone number")
+	input.Validator.Check(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "Phone number must be in international format")
+
+	found, err = h.db.CheckIfPhoneNumberExist(input.PhoneNumber)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	input.Validator.Check(!found, "Phone number has been registered")
 
 	if input.Validator.HasErrors() {
 		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
@@ -114,8 +123,8 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 
 	// call the NewWalletHandler constructor and
 	// then generate  a wallet for the created user
-	walletHandler := NewWalletHandler(h.db)
-	_, err = walletHandler.generateWallet(userID, tx)
+	walletHandler := NewWalletHandler(h.db, nil)
+	_, err = walletHandler.generateWallet(userID, newUser.PhoneNumber, tx)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
@@ -157,9 +166,9 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
-
+	log.Println("foundfoundfound", found)
 	input.Validator.Check(input.Email != "", "Email is required")
-	input.Validator.Check(found, "Email address could not be found")
+	input.Validator.Check(found, "Incorrect email/password")
 
 	if found {
 		passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
@@ -169,7 +178,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		input.Validator.Check(input.Password != "", "Password is required")
-		input.Validator.Check(passwordMatches, "Password is incorrect")
+		input.Validator.Check(passwordMatches, "Incorrect email/password")
 	}
 
 	if input.Validator.HasErrors() {

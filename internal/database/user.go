@@ -8,17 +8,18 @@ import (
 )
 
 type User struct {
-	ID             int          `db:"id"`
-	FirstName      string       `db:"first_name"`
-	LastName       string       `db:"last_name"`
-	PhoneNumber    string       `db:"phone_number"`
-	Gender         string       `db:"gender"`
-	Email          string       `db:"email"`
-	Status         string       `db:"status"`
-	CreatedAt      time.Time    `db:"created_at"`
-	DeletedAt      sql.NullTime `db:"deleted_at"`
-	VerifiedAt     sql.NullTime `db:"verified_at"`
-	HashedPassword string       `db:"hashed_password"`
+	ID             int           `db:"id"`
+	FirstName      string        `db:"first_name"`
+	LastName       string        `db:"last_name"`
+	PhoneNumber    string        `db:"phone_number"`
+	Gender         string        `db:"gender"`
+	Email          string        `db:"email"`
+	Status         string        `db:"status"`
+	Pin            sql.NullInt32 `db:"pin"`
+	CreatedAt      time.Time     `db:"created_at"`
+	DeletedAt      sql.NullTime  `db:"deleted_at"`
+	VerifiedAt     sql.NullTime  `db:"verified_at"`
+	HashedPassword string        `db:"hashed_password"`
 }
 
 func (db *DB) InsertUser(user *User, tx *sql.Tx) (int, error) {
@@ -90,6 +91,21 @@ func (db *DB) GetUserByEmail(email string) (*User, bool, error) {
 	}
 
 	return &user, true, err
+}
+func (db *DB) CheckIfPhoneNumberExist(phone_number string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	var exists bool
+
+	query := `SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1)`
+
+	err := db.GetContext(ctx, &exists, query, phone_number)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (db *DB) UpdateUserHashedPassword(id int, hashedPassword string) error {

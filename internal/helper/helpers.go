@@ -2,6 +2,8 @@ package helper
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -42,4 +44,26 @@ func (h *HelperRepository) BackgroundTask(r *http.Request, fn func() error) {
 			// h.errorHandler.ReportServerError(r, err)
 		}
 	}()
+}
+
+func toSnakeCase(s string) string {
+	re := regexp.MustCompile("([a-z0-9])([A-Z])")
+	snake := re.ReplaceAllString(s, "${1}_${2}")
+	return strings.ToLower(snake)
+}
+
+func ConvertKeysToSnakeCase(data map[string]interface{}) map[string]interface{} {
+	snakeData := make(map[string]interface{})
+
+	for key, value := range data {
+		snakeKey := toSnakeCase(key)
+
+		// Recursively handle nested maps
+		if nestedMap, ok := value.(map[string]interface{}); ok {
+			value = ConvertKeysToSnakeCase(nestedMap)
+		}
+
+		snakeData[snakeKey] = value
+	}
+	return snakeData
 }

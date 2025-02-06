@@ -3,6 +3,8 @@ package response
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/cradoe/morenee/internal/helper"
 )
 
 type Response[T any] struct {
@@ -18,6 +20,11 @@ func JSONCreatedResponse(w http.ResponseWriter, data any, message string) error 
 		message = "Request successful"
 	}
 
+	convertedData, ok := data.(map[string]any)
+	if ok {
+		data = helper.ConvertKeysToSnakeCase(convertedData)
+	}
+
 	response := &Response[any]{
 		Status:  http.StatusCreated,
 		Success: true,
@@ -31,6 +38,11 @@ func JSONCreatedResponse(w http.ResponseWriter, data any, message string) error 
 func JSONOkResponse(w http.ResponseWriter, data any, message string, headers http.Header) error {
 	if message == "" {
 		message = "Request successful"
+	}
+
+	convertedData, ok := data.(map[string]any)
+	if ok {
+		data = helper.ConvertKeysToSnakeCase(convertedData)
 	}
 
 	response := &Response[any]{
