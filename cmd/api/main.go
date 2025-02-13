@@ -40,7 +40,8 @@ func run(logger *slog.Logger) error {
 	}
 	defer application.DB.Close()
 
-	go worker.DebitWorker(application.Kafka)
+	wk := worker.New(application.Kafka, application.DB)
+	go wk.DebitWorker()
 
 	return application.ServeHTTP()
 }

@@ -142,3 +142,94 @@ func (db *DB) FindWalletByAccountNumber(account_number string) (*Wallet, bool, e
 
 	return &wallet, true, nil
 }
+
+func (db *DB) DebitWallet(walletID int, amount float64) (bool, error) {
+	// we need to first check if the wallet has enough balance to process the transaction
+	// if not, we return an error
+	// if the wallet has enough balance, we proceed to debit the wallet
+	// we'll use optimistic lock to lock the account for the duration of the operation
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+
+	defer tx.Rollback()
+
+	var wallet Wallet
+
+	query := `
+		SELECT balance FROM wallets WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`
+
+	err = tx.GetContext(ctx, &wallet, query, walletID)
+
+	if err != nil {
+		return false, err
+	}
+
+	if wallet.Balance < amount {
+		return false, nil
+	}
+
+	query = `
+		UPDATE wallets SET balance=balance-$1 WHERE id=$2 AND deleted_at IS NULL`
+
+	_, err = tx.ExecContext(ctx, query, amount, walletID)
+
+	if err != nil {
+		return false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+
+}
+
+func (db *DB) CreditWallet(walletID int, amount float64) (bool, error) {
+	// we'll use optimistic lock to lock the account for the duration of the operation
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+
+	defer tx.Rollback()
+
+	var wallet Wallet
+
+	query := `
+		SELECT balance FROM wallets WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`
+
+	err = tx.GetContext(ctx, &wallet, query, walletID)
+
+	if err != nil {
+		return false, err
+	}
+
+	query = `
+		UPDATE wallets SET balance=balance+$1 WHERE id=$2 AND deleted_at IS NULL`
+
+	_, err = tx.ExecContext(ctx, query, amount, walletID)
+
+	if err != nil {
+		return false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+
+}

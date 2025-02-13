@@ -34,6 +34,10 @@ var (
 	ErrWalletNotFound              = errors.New("wallet not found")
 )
 
+const (
+	transferCreatedTopic = "transfer.created"
+)
+
 type transactionHandler struct {
 	db         *database.DB
 	errHandler *errHandler.ErrorRepository
@@ -284,7 +288,8 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		return
 	}
 
-	go h.kafka.ProduceMessage("transfer.created", string(jsonMessage))
+	// Produce message so that the debit worker can debit the sender
+	go h.kafka.ProduceMessage(transferCreatedTopic, string(jsonMessage))
 
 	err = response.JSONOkResponse(w, data, message, nil)
 	if err != nil {

@@ -18,6 +18,13 @@ type Transaction struct {
 	UpdatedAt         sql.NullTime `db:"updated_at"`
 }
 
+// define possible transaction status
+const (
+	TransactionStatusPending   = "pending"
+	TransactionStatusCompleted = "completed"
+	TransactionStatusFailed    = "failed"
+)
+
 func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (*Transaction, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()

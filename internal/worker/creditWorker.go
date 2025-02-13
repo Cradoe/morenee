@@ -10,10 +10,10 @@ import (
 	"github.com/cradoe/morenee/internal/stream"
 )
 
-func (wk *Worker) DebitWorker() {
+func (wk *Worker) CreditWorker() {
 	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
-		GroupId: transferDebitGroupID,
-		Topic:   transferCreatedTopic, // Listen to when transfer is created
+		GroupId: transferCreditGroupID,
+		Topic:   transferDebitTopic, // Listen to when debit has been done on the sender's account
 	})
 
 	if err != nil {
@@ -29,10 +29,10 @@ func (wk *Worker) DebitWorker() {
 			var transferReq handler.InitiatedTransfer
 			json.Unmarshal(message, &transferReq)
 
-			success := wk.debitAccount(&transferReq)
+			success := wk.creditAccount(&transferReq)
 			if success {
-				// Produce message so that the credit worker can credit the receiver
-				wk.kafkaStream.ProduceMessage(transferDebitTopic, string(e.Value))
+				// Produce message the success worker can mark the transaction as successful
+				wk.kafkaStream.ProduceMessage(transferSuccessTopic, string(e.Value))
 			}
 		case kafka.Error:
 			log.Printf("Error: %v\n", e)
@@ -43,24 +43,24 @@ func (wk *Worker) DebitWorker() {
 
 }
 
-func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
-	_, err := wk.db.DebitWallet(transferReq.SenderWalletID, transferReq.Amount)
+func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
+	_, err := wk.db.CreditWallet(transferReq.RecipientWalletID, transferReq.Amount)
 	if err != nil {
-		log.Printf("Error debitting wallet: %v", err)
+		log.Printf("Error crediting wallet: %v", err)
 		return false
 	}
 
 	// log operation
 	_, err = wk.db.CreateTransactionLog(
 		&database.TransactionLog{
-			UserID:        transferReq.SenderWalletID,
+			UserID:        transferReq.RecipientWalletID,
 			TransactionID: transferReq.ID,
-			Action:        database.TransactionLogActionDebit,
+			Action:        database.TransactionLogActionCredit,
 		},
 	)
 
 	if err != nil {
-		log.Printf("Error debitting wallet: %v", err)
+		log.Printf("Error crediting wallet: %v", err)
 		return false
 	}
 

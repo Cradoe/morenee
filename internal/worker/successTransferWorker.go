@@ -10,10 +10,10 @@ import (
 	"github.com/cradoe/morenee/internal/stream"
 )
 
-func (wk *Worker) DebitWorker() {
+func (wk *Worker) SuccessTransferWorker() {
 	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
-		GroupId: transferDebitGroupID,
-		Topic:   transferCreatedTopic, // Listen to when transfer is created
+		GroupId: transferSuccessGroupID,
+		Topic:   transferCreatedTopic, // Listen to when recipient account has been credited
 	})
 
 	if err != nil {
@@ -24,15 +24,15 @@ func (wk *Worker) DebitWorker() {
 		switch e := event.(type) {
 		case *kafka.Message:
 			message := e.Value
-			log.Printf("Message received on %s: %s\n", e.TopicPartition, string(e.Value))
+			log.Printf("Success message received on %s: %s\n", e.TopicPartition, string(e.Value))
 
 			var transferReq handler.InitiatedTransfer
 			json.Unmarshal(message, &transferReq)
 
-			success := wk.debitAccount(&transferReq)
+			success := wk.completeTransferOperation(&transferReq)
 			if success {
-				// Produce message so that the credit worker can credit the receiver
-				wk.kafkaStream.ProduceMessage(transferDebitTopic, string(e.Value))
+				// send notifications to the sender and receiver
+				log.Printf("Transfer completed successfully: %v", transferReq)
 			}
 		case kafka.Error:
 			log.Printf("Error: %v\n", e)
@@ -43,24 +43,24 @@ func (wk *Worker) DebitWorker() {
 
 }
 
-func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
-	_, err := wk.db.DebitWallet(transferReq.SenderWalletID, transferReq.Amount)
+func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransfer) bool {
+	_, err := wk.db.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusCompleted)
 	if err != nil {
-		log.Printf("Error debitting wallet: %v", err)
+		log.Printf("Error updating transaction status: %v", err)
 		return false
 	}
 
 	// log operation
 	_, err = wk.db.CreateTransactionLog(
 		&database.TransactionLog{
-			UserID:        transferReq.SenderWalletID,
+			UserID:        transferReq.RecipientWalletID,
 			TransactionID: transferReq.ID,
-			Action:        database.TransactionLogActionDebit,
+			Action:        database.TransactionLogActionSuccess,
 		},
 	)
 
 	if err != nil {
-		log.Printf("Error debitting wallet: %v", err)
+		log.Printf("Error creating transaction log: %v", err)
 		return false
 	}
 
