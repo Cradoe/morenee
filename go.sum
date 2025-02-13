@@ -4,6 +4,8 @@ github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 h1:L/gRVlceqvL25
 github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
+github.com/confluentinc/confluent-kafka-go/v2 v2.8.0 h1:0HlcSNWg4LpLA9nIjzUMIqWHI+w0S68UN7alXAc3TeA=
+github.com/confluentinc/confluent-kafka-go/v2 v2.8.0/go.mod h1:hScqtFIGUI1wqHIgM3mjoqEou4VweGGGX7dMpcUKves=
 github.com/cradoe/gopass v1.1.0 h1:3V6/WVWjKmygOK3svrpZYKLrk+PshE+dR69115l+WPM=
 github.com/cradoe/gopass v1.1.0/go.mod h1:13hvfUVjzJ0lxTP6ULLRqu1DvsMSDBsuEFpoe9E1AY4=
 github.com/cradoe/gopass v1.1.1 h1:zNmSQYPTr3C4Hvh8hxOhCX+Acz3BSRQe2v+yccsw0ao=

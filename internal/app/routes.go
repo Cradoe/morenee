@@ -14,7 +14,7 @@ func (app *Application) routes() http.Handler {
 	healthHandler := handler.NewHealthCheckHandler(app.errorHandler)
 	authHandler := handler.NewAuthHandler(app.DB, &app.Config, app.errorHandler)
 	walletHandler := handler.NewWalletHandler(app.DB, app.errorHandler)
-	transcHandler := handler.NewTransactionHandler(app.DB, app.errorHandler)
+	transcHandler := handler.NewTransactionHandler(app.DB, app.errorHandler, app.Kafka)
 
 	mux.HandleFunc("GET /health", healthHandler.HandleHealthCheck)
 

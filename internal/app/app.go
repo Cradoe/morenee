@@ -11,6 +11,7 @@ import (
 	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/helper"
 	"github.com/cradoe/morenee/internal/smtp"
+	"github.com/cradoe/morenee/internal/stream"
 	"github.com/joho/godotenv"
 )
 
@@ -22,6 +23,7 @@ type Application struct {
 	WG           sync.WaitGroup
 	errorHandler *errHandler.ErrorRepository
 	helper       *helper.HelperRepository
+	Kafka        *stream.KafkaStream
 }
 
 func NewApplication(logger *slog.Logger) (*Application, error) {
@@ -42,6 +44,7 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 	cfg.Smtp.Username = env.GetString("SMTP_USERNAME", "example_username")
 	cfg.Smtp.Password = env.GetString("SMTP_PASSWORD", "pa55word")
 	cfg.Smtp.From = env.GetString("SMTP_FROM", "Example Name <no_reply@example.org>")
+	cfg.KafkaServers = env.GetString("KAFKA_SERVERS", "localhost:9092")
 
 	db, err := database.New(cfg.Db.Dsn, cfg.Db.Automigrate)
 	if err != nil {
@@ -55,6 +58,8 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	helper := helper.New(&cfg.BaseURL)
 	errorHandler := errHandler.New(cfg.Notifications.Email, mailer, logger, helper)
+
+	kafkaStream := stream.New(cfg.KafkaServers)
 	app := &Application{
 		Config:       cfg,
 		DB:           db,
@@ -62,6 +67,7 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 		Mailer:       mailer,
 		errorHandler: errorHandler,
 		helper:       helper,
+		Kafka:        kafkaStream,
 	}
 
 	return app, nil

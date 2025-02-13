@@ -9,6 +9,7 @@ import (
 
 	"github.com/cradoe/morenee/internal/app"
 	"github.com/cradoe/morenee/internal/version"
+	"github.com/cradoe/morenee/internal/worker"
 )
 
 func main() {
@@ -20,6 +21,8 @@ func main() {
 		logger.Error(err.Error(), "trace", trace)
 		os.Exit(1)
 	}
+
+	select {}
 }
 
 func run(logger *slog.Logger) error {
@@ -36,6 +39,8 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer application.DB.Close()
+
+	go worker.DebitWorker(application.Kafka)
 
 	return application.ServeHTTP()
 }

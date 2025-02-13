@@ -27,7 +27,7 @@ func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (*Transact
 	query := `
 		INSERT INTO transactions (sender_wallet_id, recipient_wallet_id, amount, reference_number)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, status, reference_number, amount`
+		RETURNING id, status, reference_number, amount, sender_wallet_id, recipient_wallet_id, created_at`
 	if tx != nil {
 		err := tx.QueryRowContext(ctx, query,
 			transaction.SenderWalletID,

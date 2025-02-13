@@ -20,4 +20,5 @@ type Config struct {
 		Password string
 		From     string
 	}
+	KafkaServers string
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	dctx "context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
+	"github.com/cradoe/morenee/internal/stream"
 	"github.com/cradoe/morenee/internal/validator"
 )
 
@@ -35,12 +37,14 @@ var (
 type transactionHandler struct {
 	db         *database.DB
 	errHandler *errHandler.ErrorRepository
+	kafka      *stream.KafkaStream
 }
 
-func NewTransactionHandler(db *database.DB, errHandler *errHandler.ErrorRepository) *transactionHandler {
+func NewTransactionHandler(db *database.DB, errHandler *errHandler.ErrorRepository, kafka *stream.KafkaStream) *transactionHandler {
 	return &transactionHandler{
 		db:         db,
 		errHandler: errHandler,
+		kafka:      kafka,
 	}
 }
 
@@ -50,6 +54,16 @@ type TransferFundsInput struct {
 	ReferenceNumber string              `json:"reference_number"`
 	Pin             int                 `json:"pin"`
 	Validator       validator.Validator `json:"-"`
+}
+
+type InitiatedTransfer struct {
+	ID                int     `json:"id"`
+	ReferenceNumber   string  `json:"reference_number"`
+	SenderWalletID    int     `json:"sender_wallet_id"`
+	RecipientWalletID int     `json:"recipient_wallet_id"`
+	Status            string  `json:"status"`
+	Amount            float64 `json:"amount"`
+	CreatedAt         string  `json:"created_at"`
 }
 
 func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Request) {
@@ -253,12 +267,24 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 
 	// go h.transactionQueue.Enqueue(transactionID)
 	message := "Transfer initiated successfully"
-	data := map[string]any{
-		"id":               transaction.ID,
-		"reference_number": transaction.ReferenceNumber,
-		"status":           transaction.Status,
-		"amount":           transaction.Amount,
+
+	data := &InitiatedTransfer{
+		ID:                transaction.ID,
+		ReferenceNumber:   transaction.ReferenceNumber,
+		SenderWalletID:    transaction.SenderWalletID,
+		RecipientWalletID: transaction.RecipientWalletID,
+		Status:            transaction.Status,
+		Amount:            transaction.Amount,
+		CreatedAt:         transaction.CreatedAt.Format(time.RFC3339),
 	}
+
+	jsonMessage, err := json.Marshal(data)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	go h.kafka.ProduceMessage("transfer.created", string(jsonMessage))
 
 	err = response.JSONOkResponse(w, data, message, nil)
 	if err != nil {
