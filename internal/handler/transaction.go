@@ -35,7 +35,7 @@ var (
 )
 
 const (
-	transferCreatedTopic = "transfer.created"
+	transferDebitTopic = "transfer.debit"
 )
 
 type transactionHandler struct {
@@ -272,7 +272,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// go h.transactionQueue.Enqueue(transactionID)
 	message := "Transfer initiated successfully"
 
-	data := &InitiatedTransfer{
+	transferRes := &InitiatedTransfer{
 		ID:                transaction.ID,
 		ReferenceNumber:   transaction.ReferenceNumber,
 		SenderWalletID:    transaction.SenderWalletID,
@@ -282,16 +282,24 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		CreatedAt:         transaction.CreatedAt.Format(time.RFC3339),
 	}
 
-	jsonMessage, err := json.Marshal(data)
+	jsonMessage, err := json.Marshal(transferRes)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
 
 	// Produce message so that the debit worker can debit the sender
-	go h.kafka.ProduceMessage(transferCreatedTopic, string(jsonMessage))
+	go h.kafka.ProduceMessage(transferDebitTopic, string(jsonMessage))
 
-	err = response.JSONOkResponse(w, data, message, nil)
+	go h.db.CreateTransactionLog(
+		&database.TransactionLog{
+			UserID:        transferRes.SenderWalletID,
+			TransactionID: transferRes.ID,
+			Action:        database.TransactionLogActionInitiated,
+		},
+	)
+
+	err = response.JSONOkResponse(w, transferRes, message, nil)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 	}

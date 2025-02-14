@@ -42,6 +42,8 @@ func run(logger *slog.Logger) error {
 
 	wk := worker.New(application.Kafka, application.DB)
 	go wk.DebitWorker()
+	go wk.CreditWorker()
+	go wk.SuccessTransferWorker()
 
 	return application.ServeHTTP()
 }

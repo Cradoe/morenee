@@ -13,7 +13,7 @@ import (
 func (wk *Worker) DebitWorker() {
 	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
 		GroupId: transferDebitGroupID,
-		Topic:   transferCreatedTopic, // Listen to when transfer is created
+		Topic:   transferDebitTopic, // Listen to debit the sender's account
 	})
 
 	if err != nil {
@@ -24,15 +24,16 @@ func (wk *Worker) DebitWorker() {
 		switch e := event.(type) {
 		case *kafka.Message:
 			message := e.Value
-			log.Printf("Message received on %s: %s\n", e.TopicPartition, string(e.Value))
+			log.Printf("Debit message received on %s: %s\n", e.TopicPartition, string(e.Value))
 
 			var transferReq handler.InitiatedTransfer
 			json.Unmarshal(message, &transferReq)
 
 			success := wk.debitAccount(&transferReq)
 			if success {
+				log.Printf("Debit completed successfully: %v", transferReq)
 				// Produce message so that the credit worker can credit the receiver
-				wk.kafkaStream.ProduceMessage(transferDebitTopic, string(e.Value))
+				wk.kafkaStream.ProduceMessage(transferCreditTopic, string(e.Value))
 			}
 		case kafka.Error:
 			log.Printf("Error: %v\n", e)

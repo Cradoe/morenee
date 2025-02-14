@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -65,15 +66,22 @@ func (db *DB) UpdateTransactionStatus(transaction_id int, status string) (bool, 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var transaction Transaction
-
 	query := `
         UPDATE transactions SET status=$1 WHERE id=$2`
 
-	err := db.GetContext(ctx, &transaction, query, status, transaction_id)
-
+	result, err := db.ExecContext(ctx, query, status, transaction_id)
 	if err != nil {
 		return false, err
+	}
+
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	if rowsAffected == 0 {
+		return false, fmt.Errorf("no rows were updated, transaction ID may not exist")
 	}
 
 	return true, nil

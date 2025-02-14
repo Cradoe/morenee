@@ -13,7 +13,7 @@ import (
 func (wk *Worker) SuccessTransferWorker() {
 	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
 		GroupId: transferSuccessGroupID,
-		Topic:   transferCreatedTopic, // Listen to when recipient account has been credited
+		Topic:   transferSuccessTopic,
 	})
 
 	if err != nil {
@@ -50,10 +50,9 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 		return false
 	}
 
-	// log operation
 	_, err = wk.db.CreateTransactionLog(
 		&database.TransactionLog{
-			UserID:        transferReq.RecipientWalletID,
+			UserID:        transferReq.SenderWalletID,
 			TransactionID: transferReq.ID,
 			Action:        database.TransactionLogActionSuccess,
 		},
