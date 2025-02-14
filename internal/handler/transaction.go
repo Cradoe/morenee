@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -18,8 +19,6 @@ import (
 )
 
 var (
-	ActiveWalletStatus = "active"
-
 	ErrInActiveRecipientAccount = errors.New("we can't process transfer into the recipient's account")
 	ErrAttemptForSameAccount    = errors.New("your can't transfer to your own account")
 
@@ -63,7 +62,9 @@ type TransferFundsInput struct {
 type InitiatedTransfer struct {
 	ID                int     `json:"id"`
 	ReferenceNumber   string  `json:"reference_number"`
+	SenderID          int     `json:"sender_id"`
 	SenderWalletID    int     `json:"sender_wallet_id"`
+	RecipientID       int     `json:"recipient_id"`
 	RecipientWalletID int     `json:"recipient_wallet_id"`
 	Status            string  `json:"status"`
 	Amount            float64 `json:"amount"`
@@ -91,7 +92,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// has set PIN for their account, and
 	// entered correct PIN
 
-	input.Validator.Check(input.Pin != 0, "Pin is required")
+	input.Validator.Check(input.Pin > 0, "Pin is required")
 	// we are intentionally returning early becauase we don't want to proceed futher if Pin is not given
 	if input.Validator.HasErrors() {
 		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
@@ -117,8 +118,8 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// Step 2: Validate other input items
 	input.Validator.Check(input.Amount > 0, "Amount is required")
 
-	input.Validator.Check(input.ReferenceNumber != "", "Reference number is required")
-	input.Validator.Check(input.AccountNumber != "", "Recipient account number is required")
+	input.Validator.Check(validator.NotBlank(input.ReferenceNumber), "Reference number is required")
+	input.Validator.Check(validator.NotBlank(input.AccountNumber), "Recipient account number is required")
 
 	if input.Validator.HasErrors() {
 		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
@@ -219,13 +220,13 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	}
 
 	// Check sender wallet status
-	if senderWallet.Status != ActiveWalletStatus {
+	if senderWallet.Status != database.WalletActiveStatus {
 		response.JSONErrorResponse(w, nil, ErrInActiveSenderAccount.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
 
 	// Check recipient wallet status
-	if recipientWallet.Status != ActiveWalletStatus {
+	if recipientWallet.Status != database.WalletActiveStatus {
 		response.JSONErrorResponse(w, nil, ErrInActiveRecipientAccount.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
@@ -275,6 +276,8 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	transferRes := &InitiatedTransfer{
 		ID:                transaction.ID,
 		ReferenceNumber:   transaction.ReferenceNumber,
+		SenderID:          sender.ID,
+		RecipientID:       recipientWallet.UserID,
 		SenderWalletID:    transaction.SenderWalletID,
 		RecipientWalletID: transaction.RecipientWalletID,
 		Status:            transaction.Status,
@@ -291,13 +294,18 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// Produce message so that the debit worker can debit the sender
 	go h.kafka.ProduceMessage(transferDebitTopic, string(jsonMessage))
 
-	go h.db.CreateTransactionLog(
-		&database.TransactionLog{
-			UserID:        transferRes.SenderWalletID,
-			TransactionID: transferRes.ID,
-			Action:        database.TransactionLogActionInitiated,
-		},
-	)
+	go func() {
+		_, err = h.db.CreateAccountLog(&database.AccountLog{
+			UserID:      sender.ID,
+			Type:        database.AccountLogTypeTransaction,
+			TypeId:      transaction.ID,
+			Description: database.AccountLogTransactionInitiatedDescription,
+		})
+
+		if err != nil {
+			log.Printf("Error logging transfer initiation action: %v", err)
+		}
+	}()
 
 	err = response.JSONOkResponse(w, transferRes, message, nil)
 	if err != nil {

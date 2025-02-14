@@ -3,6 +3,7 @@ package validator
 import (
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -86,4 +87,9 @@ func IsURL(value string) bool {
 	}
 
 	return u.Scheme != "" && u.Host != ""
+}
+
+func IsDigit(value string) bool {
+	_, err := strconv.Atoi(value)
+	return err == nil
 }

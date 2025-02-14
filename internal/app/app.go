@@ -35,15 +35,19 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	cfg.BaseURL = env.GetString("BASE_URL", "http://localhost:4444")
 	cfg.HttpPort = env.GetInt("HTTP_PORT", 4444)
+
 	cfg.Db.Dsn = env.GetString("DB_DSN", "user:pass@localhost:5432/db")
 	cfg.Db.Automigrate = env.GetBool("DB_AUTOMIGRATE", true)
+
 	cfg.Jwt.SecretKey = env.GetString("JWT_SECRET_KEY", "ajf5nx3qmp6zquevllxocxqvyz42ypuo")
 	cfg.Notifications.Email = env.GetString("NOTIFICATIONS_EMAIL", "")
+
 	cfg.Smtp.Host = env.GetString("SMTP_HOST", "example.smtp.host")
 	cfg.Smtp.Port = env.GetInt("SMTP_PORT", 25)
 	cfg.Smtp.Username = env.GetString("SMTP_USERNAME", "example_username")
 	cfg.Smtp.Password = env.GetString("SMTP_PASSWORD", "pa55word")
 	cfg.Smtp.From = env.GetString("SMTP_FROM", "Example Name <no_reply@example.org>")
+
 	cfg.KafkaServers = env.GetString("KAFKA_SERVERS", "localhost:9092")
 
 	db, err := database.New(cfg.Db.Dsn, cfg.Db.Automigrate)

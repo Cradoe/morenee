@@ -16,6 +16,8 @@ func NewHealthCheckHandler(err *errHandler.ErrorRepository) *healthCheckHandler 
 		err: err,
 	}
 }
+
+// Provides a quick way to check if the service is up and running
 func (app *healthCheckHandler) HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	message := "Up and grateful"
 

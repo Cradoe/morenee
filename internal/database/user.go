@@ -22,6 +22,11 @@ type User struct {
 	HashedPassword string        `db:"hashed_password"`
 }
 
+const (
+	UserAccountActiveStatus = "active"
+	UserAccountLockedStatus = "locked"
+)
+
 func (db *DB) InsertUser(user *User, tx *sql.Tx) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
@@ -115,5 +120,25 @@ func (db *DB) UpdateUserHashedPassword(id int, hashedPassword string) error {
 	query := `UPDATE users SET hashed_password = $1 WHERE id = $2`
 
 	_, err := db.ExecContext(ctx, query, hashedPassword, id)
+	return err
+}
+
+func (db *DB) SetAccountPin(id int, pin string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	query := `UPDATE users SET pin = $1 WHERE id = $2`
+
+	_, err := db.ExecContext(ctx, query, pin, id)
+	return err
+}
+
+func (db *DB) UserLockAccount(id int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	query := `UPDATE users SET status = $1 WHERE id = $2`
+
+	_, err := db.ExecContext(ctx, query, UserAccountLockedStatus, id)
 	return err
 }

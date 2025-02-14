@@ -52,18 +52,18 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 	}
 
 	// log operation
-	_, err = wk.db.CreateTransactionLog(
-		&database.TransactionLog{
-			UserID:        transferReq.SenderWalletID,
-			TransactionID: transferReq.ID,
-			Action:        database.TransactionLogActionDebit,
-		},
-	)
+	go func() {
+		_, err = wk.db.CreateAccountLog(&database.AccountLog{
+			UserID:      transferReq.SenderID,
+			Type:        database.AccountLogTypeTransaction,
+			TypeId:      transferReq.ID,
+			Description: database.AccountLogTransactionDebitDescription,
+		})
 
-	if err != nil {
-		log.Printf("Error debitting wallet: %v", err)
-		return false
-	}
+		if err != nil {
+			log.Printf("Error logging debit action: %v", err)
+		}
+	}()
 
 	return true
 }

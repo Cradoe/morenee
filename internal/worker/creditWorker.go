@@ -52,18 +52,18 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 	}
 
 	// log operation
-	_, err = wk.db.CreateTransactionLog(
-		&database.TransactionLog{
-			UserID:        transferReq.RecipientWalletID,
-			TransactionID: transferReq.ID,
-			Action:        database.TransactionLogActionCredit,
-		},
-	)
+	go func() {
+		_, err = wk.db.CreateAccountLog(&database.AccountLog{
+			UserID:      transferReq.RecipientID,
+			Type:        database.AccountLogTypeTransaction,
+			TypeId:      transferReq.ID,
+			Description: database.AccountLogTransactionCreditDescription,
+		})
 
-	if err != nil {
-		log.Printf("Error crediting wallet: %v", err)
-		return false
-	}
+		if err != nil {
+			log.Printf("Error logging credit action: %v", err)
+		}
+	}()
 
 	return true
 }

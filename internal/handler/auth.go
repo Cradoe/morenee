@@ -48,40 +48,46 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// we need to validate the password to make sure it meets the minimum requirements
+	// the Validate function returns a slice of errors if the password does not meet the requirements
+	_, errs := gopass.Validate(input.Password)
+
+	if errs != nil {
+		// return any errors found before we check the other fields
+		// It's important that users have a strong password
+		h.errHandler.FailedValidation(w, r, errs)
+		return
+	}
+
 	_, found, err := h.db.GetUserByEmail(input.Email)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
 
-	input.Validator.Check(input.Email != "", "Email is required")
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
 	input.Validator.Check(validator.Matches(input.Email, validator.RgxEmail), "Must be a valid email address")
+
+	// we want to make sure no two users have the same email
 	input.Validator.Check(!found, "Email is already in use")
 
-	ok, errs := gopass.Validate(input.Password)
-
-	if !ok {
-		h.errHandler.FailedValidation(w, r, errs)
-		return
-	}
-
-	input.Validator.Check(input.FirstName != "", "First name is required")
+	input.Validator.Check(validator.NotBlank(input.FirstName), "First name is required")
 	input.Validator.Check(len(input.FirstName) >= 3, "First name is too short")
 
-	input.Validator.Check(input.LastName != "", "Last name is required")
+	input.Validator.Check(validator.NotBlank(input.LastName), "Last name is required")
 	input.Validator.Check(len(input.LastName) >= 3, "Last name is too short")
 
-	input.Validator.Check(input.Gender != "", "Gender is required")
+	input.Validator.Check(validator.NotBlank(input.Gender), "Gender is required")
 
-	input.Validator.Check(input.PhoneNumber != "", "Phone number is required")
+	input.Validator.Check(validator.NotBlank(input.PhoneNumber), "Phone number is required")
 	input.Validator.Check(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "Phone number must be in international format")
 
+	// we want to make sure no two users have the same phone number
 	found, err = h.db.CheckIfPhoneNumberExist(input.PhoneNumber)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
-
 	input.Validator.Check(!found, "Phone number has been registered")
 
 	if input.Validator.HasErrors() {
@@ -94,6 +100,10 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
+
+	// we are using transactions to make sure that if any of the operations fail
+	// we can rollback the changes and return an error to the client
+	// ...without having incomplete data in the operations
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
@@ -101,6 +111,8 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	}
 
 	defer func() {
+		// always make sure it rollback, if there is an error
+		// ...and the transaction is not committed
 		if err != nil {
 			tx.Rollback()
 		}
@@ -135,9 +147,23 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	go func() {
+		_, err = h.db.CreateAccountLog(&database.AccountLog{
+			UserID:      userID,
+			Type:        database.AccountLogTypeUser,
+			TypeId:      userID,
+			Description: database.AccountLogUserRegistrationDescription,
+		})
+
+		if err != nil {
+			log.Printf("Error logging user registration action: %v", err)
+		}
+	}()
+
 	// NB:: other operations that we could do include:
 	// sending account activation email
-	// but we are just going to skip that and focus on the core implementation of the system
+	// but we are just going to skip that and focus on the core implementation that
+	// ... we are trying to achieve, which is to mock wallet-to-wallet transactions
 
 	message := "Account created successfully"
 
@@ -166,8 +192,8 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		h.errHandler.ServerError(w, r, err)
 		return
 	}
-	log.Println("foundfoundfound", found)
-	input.Validator.Check(input.Email != "", "Email is required")
+
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
 	input.Validator.Check(found, "Incorrect email/password")
 
 	if found {
@@ -177,14 +203,66 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		input.Validator.Check(input.Password != "", "Password is required")
+		input.Validator.Check(validator.NotBlank(input.Password), "Password is required")
 		input.Validator.Check(passwordMatches, "Incorrect email/password")
+
+		if !passwordMatches {
+			go func() {
+				_, err = h.db.CreateAccountLog(&database.AccountLog{
+					UserID:      user.ID,
+					Type:        database.AccountLogTypeUser,
+					TypeId:      user.ID,
+					Description: database.AccountLogFailedLoginDescription,
+				})
+
+				if err != nil {
+					log.Printf("Error logging failed login action: %v", err)
+				}
+			}()
+
+			//  if password is not correct, log, that, and lock the account after 3 consecutive failed attempts
+			count := h.db.CountFailedLoginAttempts(user.ID)
+			// check if we already have 2 failed login attempts before this one.
+			if count >= 2 {
+				go h.db.UserLockAccount(user.ID)
+
+				h.errHandler.FailedValidation(w, r, []string{"Account has been locked. Please contact support"})
+				return
+			}
+		}
+
 	}
 
 	if input.Validator.HasErrors() {
 		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
+
+	// check that account is active
+	if user.Status != database.UserAccountActiveStatus {
+
+		message := "Account has been locked. Please contact support"
+
+		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
+
+		if err != nil {
+			h.errHandler.ServerError(w, r, err)
+		}
+		return
+	}
+
+	go func() {
+		_, err = h.db.CreateAccountLog(&database.AccountLog{
+			UserID:      user.ID,
+			Type:        database.AccountLogTypeUser,
+			TypeId:      user.ID,
+			Description: database.AccountLogUserLoginDescription,
+		})
+
+		if err != nil {
+			log.Printf("Error logging successful login action: %v", err)
+		}
+	}()
 
 	var claims jwt.Claims
 	claims.Subject = strconv.Itoa(user.ID)

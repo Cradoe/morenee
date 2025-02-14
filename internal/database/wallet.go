@@ -21,7 +21,11 @@ type Wallet struct {
 	UpdatedAt           sql.NullTime `db:"updated_at"`
 }
 
-var (
+const (
+	WalletActiveStatus = "active"
+)
+
+const (
 	Level1SingleTransferLimit float64 = 50_000
 	Level1DailyTransferLimit  float64 = 200_000
 )
@@ -129,7 +133,7 @@ func (db *DB) FindWalletByAccountNumber(account_number string) (*Wallet, bool, e
 	var wallet Wallet
 
 	query := `
-        SELECT id, balance, currency, account_number, status, created_at FROM wallets WHERE account_number=$1 AND deleted_at IS NULL`
+        SELECT id, user_id, balance, currency, account_number, status, created_at FROM wallets WHERE account_number=$1 AND deleted_at IS NULL`
 
 	err := db.GetContext(ctx, &wallet, query, account_number)
 

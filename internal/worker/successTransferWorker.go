@@ -50,18 +50,18 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 		return false
 	}
 
-	_, err = wk.db.CreateTransactionLog(
-		&database.TransactionLog{
-			UserID:        transferReq.SenderWalletID,
-			TransactionID: transferReq.ID,
-			Action:        database.TransactionLogActionSuccess,
-		},
-	)
+	go func() {
+		_, err = wk.db.CreateAccountLog(&database.AccountLog{
+			UserID:      transferReq.SenderID,
+			Type:        database.AccountLogTypeTransaction,
+			TypeId:      transferReq.ID,
+			Description: database.AccountLogTransactionSuccessDescription,
+		})
 
-	if err != nil {
-		log.Printf("Error creating transaction log: %v", err)
-		return false
-	}
+		if err != nil {
+			log.Printf("Error logging debit action: %v", err)
+		}
+	}()
 
 	return true
 }
