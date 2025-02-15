@@ -18,13 +18,13 @@ func (app *Application) routes() http.Handler {
 
 	middlewareRepo := middleware.New(app.errorHandler, app.Logger, app.DB, &app.Config)
 
+	// Health-check route
 	healthHandler := handler.NewHealthCheckHandler(app.errorHandler)
 	mux.HandleFunc("GET /health", healthHandler.HandleHealthCheck)
 
 	// Auth routes
 	authHandler := handler.NewAuthHandler(app.DB, &app.Config, app.errorHandler)
 	mux.HandleFunc("POST /auth/register", authHandler.HandleAuthRegister)
-	mux.HandleFunc("POST /auth/set-pin", authHandler.HandleAuthRegister)
 	mux.HandleFunc("POST /auth/login", authHandler.HandleAuthLogin)
 
 	// Account routes

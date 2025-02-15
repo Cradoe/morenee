@@ -15,6 +15,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// global level functions, helpers, configs, etc, are exposed to the application
+// this makes it possible for methods to have access to these items and when they need them
 type Application struct {
 	Config       config.Config
 	DB           *database.DB
@@ -33,6 +35,9 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	var cfg config.Config
 
+	// config values are loaded from the .env file
+	// Default values are provided for these items and these should  strictly be values for development mode only
+	// make sure no production-level value is exposed as default value here
 	cfg.BaseURL = env.GetString("BASE_URL", "http://localhost:4444")
 	cfg.HttpPort = env.GetInt("HTTP_PORT", 4444)
 
@@ -40,6 +45,8 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 	cfg.Db.Automigrate = env.GetBool("DB_AUTOMIGRATE", true)
 
 	cfg.Jwt.SecretKey = env.GetString("JWT_SECRET_KEY", "ajf5nx3qmp6zquevllxocxqvyz42ypuo")
+
+	// server errors won't be sent via email if the NOTIFICATIONS_EMAIL wasn't set in the .env file
 	cfg.Notifications.Email = env.GetString("NOTIFICATIONS_EMAIL", "")
 
 	cfg.Smtp.Host = env.GetString("SMTP_HOST", "example.smtp.host")
@@ -61,9 +68,11 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 	}
 
 	helper := helper.New(&cfg.BaseURL)
+
 	errorHandler := errHandler.New(cfg.Notifications.Email, mailer, logger, helper)
 
 	kafkaStream := stream.New(cfg.KafkaServers)
+
 	app := &Application{
 		Config:       cfg,
 		DB:           db,

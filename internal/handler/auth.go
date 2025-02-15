@@ -31,6 +31,10 @@ func NewAuthHandler(db *database.DB, config *config.Config, errHandler *errHandl
 	}
 }
 
+// New user registration typically involves:
+// Input validations and checking that records has not already existed for the unique fields, such as enail
+// We then start a database transaction to insert the user record and also create a wallet for the user
+// Failed operatin at any point will make the function to rollback their actions
 func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email       string              `json:"email"`
@@ -66,7 +70,7 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	}
 
 	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
-	input.Validator.Check(validator.Matches(input.Email, validator.RgxEmail), "Must be a valid email address")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
 
 	// we want to make sure no two users have the same email
 	input.Validator.Check(!found, "Email is already in use")
@@ -194,6 +198,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
 	input.Validator.Check(found, "Incorrect email/password")
 
 	if found {

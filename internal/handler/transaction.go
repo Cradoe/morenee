@@ -2,6 +2,7 @@ package handler
 
 import (
 	dctx "context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,14 +52,6 @@ func NewTransactionHandler(db *database.DB, errHandler *errHandler.ErrorReposito
 	}
 }
 
-type TransferFundsInput struct {
-	AccountNumber   string              `json:"account_number"`
-	Amount          float64             `json:"amount"`
-	ReferenceNumber string              `json:"reference_number"`
-	Pin             int                 `json:"pin"`
-	Validator       validator.Validator `json:"-"`
-}
-
 type InitiatedTransfer struct {
 	ID                int     `json:"id"`
 	ReferenceNumber   string  `json:"reference_number"`
@@ -78,6 +71,15 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// Step 3: Account verifications, check activeness, daily limit, and co
 	// Step 4. Perform quick lookups such as suspicious transfers, fraudulent activities, etc
 	// Step 5: create a pending transaction and initialize a background worker to handle the rest
+
+	type TransferFundsInput struct {
+		AccountNumber   string              `json:"account_number"`
+		Amount          float64             `json:"amount"`
+		ReferenceNumber string              `json:"reference_number"`
+		Description     sql.NullString      `json:"description"`
+		Pin             int                 `json:"pin"`
+		Validator       validator.Validator `json:"-"`
+	}
 
 	var input TransferFundsInput
 
@@ -263,6 +265,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		RecipientWalletID: recipientWallet.ID,
 		Amount:            input.Amount,
 		ReferenceNumber:   input.ReferenceNumber,
+		Description:       input.Description,
 	}
 	transaction, err := h.db.CreateTransaction(newTrans, nil)
 	if err != nil {
@@ -270,7 +273,6 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// go h.transactionQueue.Enqueue(transactionID)
 	message := "Transfer initiated successfully"
 
 	transferRes := &InitiatedTransfer{

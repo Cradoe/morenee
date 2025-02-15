@@ -1,3 +1,7 @@
+// Successful transactions are the ones that as gone through debitting (sender) and creditting (recipient)
+// A record was created in the transactions table synchronousely when the transfer was initiated
+// We need to mark that record as successful.
+// We also need to send necessary notifications to both involed users.
 package worker
 
 import (
@@ -24,8 +28,6 @@ func (wk *Worker) SuccessTransferWorker() {
 		switch e := event.(type) {
 		case *kafka.Message:
 			message := e.Value
-			log.Printf("Success message received on %s: %s\n", e.TopicPartition, string(e.Value))
-
 			var transferReq handler.InitiatedTransfer
 			json.Unmarshal(message, &transferReq)
 
@@ -60,6 +62,9 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 
 		if err != nil {
 			log.Printf("Error logging debit action: %v", err)
+			// We should raise a critical error that notifies all concerned parties
+			// whenever we encountered failure in logging action.
+			// Logging is a key part of our system and should be treated as priority.
 		}
 	}()
 

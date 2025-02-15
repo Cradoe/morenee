@@ -1,3 +1,7 @@
+// context are used to save values in session for the lifecyle of the Request
+// we set value at the top-layer, which can then be retrieved
+// later in the application
+// Typically used in middlewares and handlers
 package context
 
 import (

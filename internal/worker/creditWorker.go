@@ -1,3 +1,10 @@
+// Crediting is done when there's a transfer request and debit has been done from the sender's account
+// Creditting locks the wallet if the received amount exceeds the wallet limit of the user,
+// ... which is controlled by the user's KYC level
+// Our listeners checks (polling) every 100ms for new event
+// We need to make sure the creditting is done with optimistic lock, to avoid race condition
+// A log of this action is submitted in another go routine
+// and we then produce a new asynchronous event to mark the transaction as success
 package worker
 
 import (
@@ -20,18 +27,15 @@ func (wk *Worker) CreditWorker() {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
 	for {
-		event := consumer.Poll(100) // Poll every 100ms
+		event := consumer.Poll(100)
 		switch e := event.(type) {
 		case *kafka.Message:
 			message := e.Value
-			log.Printf("Credit message received on %s: %s\n", e.TopicPartition, string(e.Value))
-
 			var transferReq handler.InitiatedTransfer
 			json.Unmarshal(message, &transferReq)
 
 			success := wk.creditAccount(&transferReq)
 			if success {
-				log.Printf("Credit completed successfully: %v", transferReq)
 				// Produce message the success worker can mark the transaction as successful
 				wk.kafkaStream.ProduceMessage(transferSuccessTopic, string(e.Value))
 			}
@@ -62,6 +66,9 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 
 		if err != nil {
 			log.Printf("Error logging credit action: %v", err)
+			// We should raise a critical error that notifies all concerned parties
+			// whenever we encountered failure in logging action.
+			// Logging is a key part of our system and should be treated as priority.
 		}
 	}()
 

@@ -155,17 +155,3 @@ func (e *ErrorRepository) AuthenticationRequired(w http.ResponseWriter, r *http.
 		headers: nil,
 	})
 }
-
-func (e *ErrorRepository) BasicAuthenticationRequired(w http.ResponseWriter, r *http.Request) {
-	headers := make(http.Header)
-	headers.Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
-
-	message := "You must be authenticated to access this resource"
-	e.ErrorMessage(&Error{
-		w:       w,
-		r:       r,
-		status:  http.StatusUnauthorized,
-		message: message,
-		headers: headers,
-	})
-}

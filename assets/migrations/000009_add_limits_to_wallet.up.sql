@@ -1,3 +1,0 @@
-ALTER TABLE wallets
-ADD COLUMN single_transfer_limit DECIMAL(15,2) NOT NULL DEFAULT 0.00,  
-ADD COLUMN daily_transfer_limit DECIMAL(15,2) NOT NULL DEFAULT 0.00;

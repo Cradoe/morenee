@@ -1,3 +1,10 @@
+// The first event after a transfer request has been initiated synchronousely is to debit the sender
+// We do this by getting event to this effect.
+// Our listeners checks (polling) every 100ms for new event
+// We need to make sure the debitting is done with optimistic lock, to avoid race condition
+// A log of this action is submitted in another go routine
+// and we then produce a new asynchronous event to credit the recipient
+
 package worker
 
 import (
@@ -13,14 +20,14 @@ import (
 func (wk *Worker) DebitWorker() {
 	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
 		GroupId: transferDebitGroupID,
-		Topic:   transferDebitTopic, // Listen to debit the sender's account
+		Topic:   transferDebitTopic,
 	})
 
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
 	for {
-		event := consumer.Poll(100) // Poll every 100ms
+		event := consumer.Poll(100)
 		switch e := event.(type) {
 		case *kafka.Message:
 			message := e.Value
@@ -62,6 +69,9 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 
 		if err != nil {
 			log.Printf("Error logging debit action: %v", err)
+			// We should raise a critical error that notifies all concerned parties
+			// whenever we encountered failure in logging action.
+			// Logging is a key part of our system and should be treated as priority.
 		}
 	}()
 
