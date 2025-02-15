@@ -65,6 +65,35 @@ run/live:
 
 
 # ==================================================================================== #
+# DOCKER COMMANDS
+# ==================================================================================== #
+
+## docker/up: start docker containers
+.PHONY: docker/up
+docker/up:
+	docker-compose up -d
+
+## docker/down: stop docker containers
+.PHONY: docker/down
+docker/down:
+	docker-compose down
+
+## docker/build: build the docker images
+.PHONY: docker/build
+docker/build:
+	docker-compose build
+
+## docker/logs: show logs for the app container
+.PHONY: docker/logs
+docker/logs:
+	docker-compose logs -f app
+
+## docker/live: run the app with hot-reloading inside the container
+.PHONY: docker/live
+docker/live:
+	docker-compose up --build app
+	
+# ==================================================================================== #
 # SQL MIGRATIONS
 # ==================================================================================== #
 
@@ -97,4 +126,3 @@ migrations/force:
 .PHONY: migrations/version
 migrations/version:
 	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path=./assets/migrations -database="postgres://${DB_DSN}" version
-
