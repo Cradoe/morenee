@@ -10,8 +10,6 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 
-COPY .air.toml ./
-
 # Copy the rest of the application
 COPY . .
 

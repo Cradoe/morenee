@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/cradoe/gopass"
-	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/errHandler"
@@ -16,15 +15,13 @@ import (
 
 type userHandler struct {
 	db         *database.DB
-	config     *config.Config
 	errHandler *errHandler.ErrorRepository
 }
 
-func NewUserHandler(db *database.DB, config *config.Config, errHandler *errHandler.ErrorRepository) *userHandler {
+func NewUserHandler(db *database.DB, errHandler *errHandler.ErrorRepository) *userHandler {
 	return &userHandler{
 		db:         db,
 		errHandler: errHandler,
-		config:     config,
 	}
 }
 

@@ -27,6 +27,10 @@ func (app *Application) routes() http.Handler {
 	mux.HandleFunc("POST /auth/set-pin", authHandler.HandleAuthRegister)
 	mux.HandleFunc("POST /auth/login", authHandler.HandleAuthLogin)
 
+	// Account routes
+	accountHandler := handler.NewUserHandler(app.DB, app.errorHandler)
+	mux.Handle("PATCH /account/pin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(accountHandler.HandleSetAccountPin)))
+
 	// Wallet routes
 	walletHandler := handler.NewWalletHandler(app.DB, app.errorHandler)
 	mux.Handle("GET /wallet/balance", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletBalance)))
