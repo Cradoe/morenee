@@ -2,7 +2,7 @@
 // Creditting locks the wallet if the received amount exceeds the wallet limit of the user,
 // ... which is controlled by the user's KYC level
 // Our listeners checks (polling) every 100ms for new event
-// We need to make sure the creditting is done with optimistic lock, to avoid race condition
+// We need to make sure the creditting is done with pessimistic lock, to avoid race condition
 // A log of this action is submitted in another go routine
 // and we then produce a new asynchronous event to mark the transaction as success
 package worker

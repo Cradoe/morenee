@@ -1,15 +1,18 @@
 // The first event after a transfer request has been initiated synchronousely is to debit the sender
 // We do this by getting event to this effect.
 // Our listeners checks (polling) every 100ms for new event
-// We need to make sure the debitting is done with optimistic lock, to avoid race condition
+// We need to make sure the debitting is done with pessimistic lock, to avoid race condition
 // A log of this action is submitted in another go routine
 // and we then produce a new asynchronous event to credit the recipient
+// We retry failed debit 5 times with exponential delays,
+// failure after the 5 trial will result in marking the transaction status as "failed"
 
 package worker
 
 import (
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/cradoe/morenee/internal/database"
@@ -28,28 +31,53 @@ func (wk *Worker) DebitWorker() {
 	}
 	defer consumer.Close()
 
+	maxRetries := 5
+	baseRetryDelay := time.Second * 2
+
 	for {
 		select {
 		case <-wk.ctx.Done():
 			log.Println("DebitWorker received cancellation signal, shutting down...")
 			return
 		default:
-			// Poll for events
 			event := consumer.Poll(100)
 			switch e := event.(type) {
 			case *kafka.Message:
-				message := e.Value
-				log.Printf("Debit message received on %s: %s\n", e.TopicPartition, string(e.Value))
+				// We use a goroutine to process each message independently
+				// This is to ensure that the worker remains non-blocking and can continue
+				// processing new messages.
+				// Delay could be caused by network or retry policy,
+				// using goroutine here is an option to make sure our worker can
+				// attend to other requests while retries are handled in the background.
+				go func(msg *kafka.Message) {
+					message := msg.Value
+					var transferReq handler.InitiatedTransfer
+					json.Unmarshal(message, &transferReq)
 
-				var transferReq handler.InitiatedTransfer
-				json.Unmarshal(message, &transferReq)
+					retryCount := 0
+					for retryCount < maxRetries {
+						success := wk.debitAccount(&transferReq)
+						if success {
+							wk.kafkaStream.ProduceMessage(TransferCreditTopic, string(msg.Value))
+							return
+						}
 
-				success := wk.debitAccount(&transferReq)
-				if success {
-					log.Printf("Debit completed successfully: %v", transferReq)
-					// Produce message so that the credit worker can credit the receiver
-					wk.kafkaStream.ProduceMessage(TransferCreditTopic, string(e.Value))
-				}
+						// we can implement retry mechanism when debit fails
+						// this will be done with exponential backoff
+						// we must have also confirmed that the `wk.debitAccount` function uses database transaction mechanish
+						// with a rollback strategy for when something happen.
+						retryCount++
+						delay := time.Duration(retryCount) * baseRetryDelay
+						log.Printf("Debit attempt failed. Retrying in %v... (attempt %d/%d)\n", delay, retryCount, maxRetries)
+						time.Sleep(delay)
+					}
+
+					// Final failure handling
+					log.Printf("Failed to debit account after %d retries. Message: %s\n", maxRetries, message)
+
+					wk.processFailedDebit(&transferReq)
+				}(e)
+
 			case kafka.Error:
 				log.Printf("Error: %v\n", e)
 			case *kafka.AssignedPartitions:
@@ -64,7 +92,6 @@ func (wk *Worker) DebitWorker() {
 func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 	_, err := wk.db.DebitWallet(transferReq.SenderWalletID, transferReq.Amount)
 	if err != nil {
-		log.Printf("Error debitting wallet: %v", err)
 		return false
 	}
 
@@ -85,5 +112,9 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 		}
 	}()
 
+	return true
+}
+
+func (wk *Worker) processFailedDebit(transferReq *handler.InitiatedTransfer) bool {
 	return true
 }

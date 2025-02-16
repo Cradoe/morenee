@@ -156,7 +156,7 @@ func (db *DB) DebitWallet(walletID string, amount float64) (bool, error) {
 	// we need to first check if the wallet has enough balance to process the transaction
 	// if not, we return an error
 	// if the wallet has enough balance, we proceed to debit the wallet
-	// we'll use optimistic lock to lock the account for the duration of the operation
+	// we'll use pessimistic lock to hold the account for the duration of the operation
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
@@ -202,7 +202,7 @@ func (db *DB) DebitWallet(walletID string, amount float64) (bool, error) {
 }
 
 func (db *DB) CreditWallet(walletID string, amount float64) (bool, error) {
-	// we'll use optimistic lock to lock the account for the duration of the operation
+	// we'll use pessimistic lock to lock the account for the duration of the operation
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
