@@ -7,9 +7,9 @@ import (
 	"github.com/cradoe/morenee/internal/middleware"
 )
 
-// This is where all our http routes are defined
+// This is where all our HTTP routes are defined
 // Similar routes are grouped together and their respective constructors
-// ...are called to initiate them with whatever dependencies they need.
+// ...are called with the dependencies they need.
 // Global level middlewares are used to wrap the routes.
 // Route specific middlewares are used to wrap ONLY the routes that need them.
 // It returns an http.Handler which can be used to start the server

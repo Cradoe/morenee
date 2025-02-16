@@ -53,12 +53,12 @@ func NewTransactionHandler(db *database.DB, errHandler *errHandler.ErrorReposito
 }
 
 type InitiatedTransfer struct {
-	ID                int     `json:"id"`
+	ID                string  `json:"id"`
 	ReferenceNumber   string  `json:"reference_number"`
-	SenderID          int     `json:"sender_id"`
-	SenderWalletID    int     `json:"sender_wallet_id"`
-	RecipientID       int     `json:"recipient_id"`
-	RecipientWalletID int     `json:"recipient_wallet_id"`
+	SenderID          string  `json:"sender_id"`
+	SenderWalletID    string  `json:"sender_wallet_id"`
+	RecipientID       string  `json:"recipient_id"`
+	RecipientWalletID string  `json:"recipient_wallet_id"`
 	Status            string  `json:"status"`
 	Amount            float64 `json:"amount"`
 	CreatedAt         string  `json:"created_at"`
@@ -76,7 +76,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		AccountNumber   string              `json:"account_number"`
 		Amount          float64             `json:"amount"`
 		ReferenceNumber string              `json:"reference_number"`
-		Description     sql.NullString      `json:"description"`
+		Description     string              `json:"description"`
 		Pin             int                 `json:"pin"`
 		Validator       validator.Validator `json:"-"`
 	}
@@ -260,12 +260,13 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// ...
 
 	// Step 5: create a pending transaction and initialize a background worker to handle the rest
+	log.Println("ddd", recipientWallet.ID)
 	newTrans := &database.Transaction{
 		SenderWalletID:    senderWallet.ID,
 		RecipientWalletID: recipientWallet.ID,
 		Amount:            input.Amount,
 		ReferenceNumber:   input.ReferenceNumber,
-		Description:       input.Description,
+		Description:       sql.NullString{String: input.Description, Valid: input.Description != ""},
 	}
 	transaction, err := h.db.CreateTransaction(newTrans, nil)
 	if err != nil {
@@ -299,8 +300,8 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	go func() {
 		_, err = h.db.CreateAccountLog(&database.AccountLog{
 			UserID:      sender.ID,
-			Type:        database.AccountLogTypeTransaction,
-			TypeId:      transaction.ID,
+			Entity:      database.AccountLogTransactionEntity,
+			EntityId:    transaction.ID,
 			Description: database.AccountLogTransactionInitiatedDescription,
 		})
 

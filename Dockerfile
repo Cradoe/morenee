@@ -33,6 +33,8 @@ CMD ["/app/bin/api"]
 # Optional hot-reloading mode (used with docker-compose)
 ENV AIR_CONFIG=.air.toml
 
-ENTRYPOINT ["air", "--build.cmd", "go build -o /tmp/bin/api ./cmd/api", "--build.bin", "/tmp/bin/api"]
+ENTRYPOINT ["air", "--build.cmd=go build -o /tmp/bin/api ./cmd/api", "--build.bin=/tmp/bin/api", "--build.kill_delay=3000"]
+
+
 
 

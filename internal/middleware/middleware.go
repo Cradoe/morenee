@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -100,7 +99,7 @@ func (mid *Middleware) Authenticate(next http.Handler) http.HandlerFunc {
 					return
 				}
 
-				userID, err := strconv.Atoi(claims.Subject)
+				userID := claims.Subject
 				if err != nil {
 					mid.errHandler.ServerError(w, r, err)
 					return

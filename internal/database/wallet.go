@@ -8,13 +8,14 @@ import (
 )
 
 type Wallet struct {
-	ID                  int          `db:"id"`
-	UserID              int          `db:"user_id"`
+	ID                  string       `db:"id"`
+	UserID              string       `db:"user_id"`
 	Balance             float64      `db:"balance"`
 	AccountNumber       string       `db:"account_number"`
 	Currency            string       `db:"currency"`
 	SingleTransferLimit float64      `db:"single_transfer_limit"`
 	DailyTransferLimit  float64      `db:"daily_transfer_limit"`
+	MaxBalance          float64      `db:"max_balance"`
 	Status              string       `db:"status"`
 	CreatedAt           time.Time    `db:"created_at"`
 	DeletedAt           sql.NullTime `db:"deleted_at"`
@@ -26,19 +27,20 @@ const (
 )
 
 const (
-	Level1SingleTransferLimit float64 = 50_000
-	Level1DailyTransferLimit  float64 = 200_000
+	Level1SingleTransferLimit  float64 = 50_000
+	Level1DailyTransferLimit   float64 = 200_000
+	Level1WalletMaximumBalance float64 = 2_000_000
 )
 
-func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (int, error) {
+func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var id int
+	var id string
 
 	query := `
-		INSERT INTO wallets (user_id, account_number, single_transfer_limit, daily_transfer_limit)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO wallets (user_id, account_number, single_transfer_limit, daily_transfer_limit, max_balance)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id`
 	if tx != nil {
 		err := tx.QueryRowContext(ctx, query,
@@ -46,23 +48,24 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (int, error) {
 			wallet.AccountNumber,
 			Level1SingleTransferLimit,
 			Level1DailyTransferLimit,
+			Level1WalletMaximumBalance,
 		).Scan(&id)
 		if err != nil {
-			return 0, err
+			return "", err
 		}
 	} else {
 		err := db.GetContext(ctx, &id, query,
 			wallet.UserID)
 
 		if err != nil {
-			return 0, err
+			return "", err
 		}
 	}
 
 	return id, nil
 }
 
-func (db *DB) GetWalletBalance(userID int) (*Wallet, error) {
+func (db *DB) GetWalletBalance(userID string) (*Wallet, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -83,7 +86,7 @@ func (db *DB) GetWalletBalance(userID int) (*Wallet, error) {
 	return &wallet, nil
 }
 
-func (db *DB) GetWalletDetails(userID int) (*Wallet, bool, error) {
+func (db *DB) GetWalletDetails(userID string) (*Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -105,7 +108,7 @@ func (db *DB) GetWalletDetails(userID int) (*Wallet, bool, error) {
 	return &wallet, true, nil
 }
 
-func (db *DB) GetWalletLimits(walletID int) (*Wallet, bool, error) {
+func (db *DB) GetWalletLimits(walletID string) (*Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -147,7 +150,7 @@ func (db *DB) FindWalletByAccountNumber(account_number string) (*Wallet, bool, e
 	return &wallet, true, nil
 }
 
-func (db *DB) DebitWallet(walletID int, amount float64) (bool, error) {
+func (db *DB) DebitWallet(walletID string, amount float64) (bool, error) {
 	// we need to first check if the wallet has enough balance to process the transaction
 	// if not, we return an error
 	// if the wallet has enough balance, we proceed to debit the wallet
@@ -196,7 +199,7 @@ func (db *DB) DebitWallet(walletID int, amount float64) (bool, error) {
 
 }
 
-func (db *DB) CreditWallet(walletID int, amount float64) (bool, error) {
+func (db *DB) CreditWallet(walletID string, amount float64) (bool, error) {
 	// we'll use optimistic lock to lock the account for the duration of the operation
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)

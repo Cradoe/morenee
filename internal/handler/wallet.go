@@ -22,7 +22,7 @@ func NewWalletHandler(db *database.DB, errHandler *errHandler.ErrorRepository) *
 	}
 }
 
-func (h *walletHandler) generateWallet(user_id int, phone_number string, tx *sql.Tx) (bool, error) {
+func (h *walletHandler) generateWallet(user_id string, phone_number string, tx *sql.Tx) (bool, error) {
 
 	// we don't have to manually check if account_number already exists because
 	// we've established that phone_number is unique in users table.

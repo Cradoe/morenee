@@ -3,7 +3,6 @@ package handler
 import (
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/cradoe/morenee/internal/config"
@@ -154,8 +153,8 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	go func() {
 		_, err = h.db.CreateAccountLog(&database.AccountLog{
 			UserID:      userID,
-			Type:        database.AccountLogTypeUser,
-			TypeId:      userID,
+			Entity:      database.AccountLogUserEntity,
+			EntityId:    userID,
 			Description: database.AccountLogUserRegistrationDescription,
 		})
 
@@ -215,8 +214,8 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			go func() {
 				_, err = h.db.CreateAccountLog(&database.AccountLog{
 					UserID:      user.ID,
-					Type:        database.AccountLogTypeUser,
-					TypeId:      user.ID,
+					Entity:      database.AccountLogUserEntity,
+					EntityId:    user.ID,
 					Description: database.AccountLogFailedLoginDescription,
 				})
 
@@ -259,8 +258,8 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		_, err = h.db.CreateAccountLog(&database.AccountLog{
 			UserID:      user.ID,
-			Type:        database.AccountLogTypeUser,
-			TypeId:      user.ID,
+			Entity:      database.AccountLogUserEntity,
+			EntityId:    user.ID,
 			Description: database.AccountLogUserLoginDescription,
 		})
 
@@ -270,7 +269,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var claims jwt.Claims
-	claims.Subject = strconv.Itoa(user.ID)
+	claims.Subject = user.ID
 
 	expiry := time.Now().Add(24 * time.Hour)
 	claims.Issued = jwt.NewNumericTime(time.Now())

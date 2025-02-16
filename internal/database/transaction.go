@@ -9,9 +9,9 @@ import (
 )
 
 type Transaction struct {
-	ID                int            `db:"id"`
-	SenderWalletID    int            `db:"sender_wallet_id"`
-	RecipientWalletID int            `db:"recipient_wallet_id"`
+	ID                string         `db:"id"`
+	SenderWalletID    string         `db:"sender_wallet_id"`
+	RecipientWalletID string         `db:"recipient_wallet_id"`
 	ReferenceNumber   string         `db:"reference_number"`
 	Amount            float64        `db:"amount"`
 	Description       sql.NullString `db:"description"`
@@ -65,7 +65,7 @@ func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (*Transact
 	return &trans, nil
 }
 
-func (db *DB) UpdateTransactionStatus(transaction_id int, status string) (bool, error) {
+func (db *DB) UpdateTransactionStatus(transaction_id string, status string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -111,7 +111,7 @@ func (db *DB) FindTransactionByReference(reference_number string) (*Transaction,
 	return &trans, true, nil
 }
 
-func (db *DB) HasExceededDailyLimit(wallet_id int, amount float64) (bool, error) {
+func (db *DB) HasExceededDailyLimit(wallet_id string, amount float64) (bool, error) {
 	// ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	// defer cancel()
 

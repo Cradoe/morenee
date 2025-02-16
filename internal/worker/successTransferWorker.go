@@ -17,7 +17,7 @@ import (
 func (wk *Worker) SuccessTransferWorker() {
 	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
 		GroupId: transferSuccessGroupID,
-		Topic:   transferSuccessTopic,
+		Topic:   TransferSuccessTopic,
 	})
 
 	if err != nil {
@@ -55,8 +55,8 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 	go func() {
 		_, err = wk.db.CreateAccountLog(&database.AccountLog{
 			UserID:      transferReq.SenderID,
-			Type:        database.AccountLogTypeTransaction,
-			TypeId:      transferReq.ID,
+			Entity:      database.AccountLogTransactionEntity,
+			EntityId:    transferReq.ID,
 			Description: database.AccountLogTransactionSuccessDescription,
 		})
 

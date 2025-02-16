@@ -24,17 +24,17 @@ const (
 	transferSuccessGroupID = "transfer-success-group"
 
 	// Topics
-	// transferDebitTopic is used to create request to debit the sender's wallet, when they initiate a transfer request to another user.
-	transferDebitTopic = "transfer.debit"
+	// TransferDebitTopic is used to create request to debit the sender's wallet, when they initiate a transfer request to another user.
+	TransferDebitTopic = "transfer.debit"
 
-	// transferCreditTopic is used to create request that credits the recipient's wallet during wallet-wallet transaction
-	transferCreditTopic = "transfer.credit"
+	// TransferCreditTopic is used to create request that credits the recipient's wallet during wallet-wallet transaction
+	TransferCreditTopic = "transfer.credit"
 
-	// transferFailureTopic is used to create request to mark transaction as failed and revert all actions, to avoid inconsistent data
-	transferFailureTopic = "transfer.failed"
+	// TransferFailureTopic is used to create request to mark transaction as failed and revert all actions, to avoid inconsistent data
+	TransferFailureTopic = "transfer.failed"
 
-	// transferSuccessTopic is used to create request to mark transaction as successful after debit and credit has been completed
-	transferSuccessTopic = "transfer.success"
+	// TransferSuccessTopic is used to create request to mark transaction as successful after debit and credit has been completed
+	TransferSuccessTopic = "transfer.success"
 )
 
 // Our workers typically needs access to database and kafka event stream

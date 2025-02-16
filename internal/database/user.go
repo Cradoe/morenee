@@ -8,7 +8,7 @@ import (
 )
 
 type User struct {
-	ID             int           `db:"id"`
+	ID             string        `db:"id"`
 	FirstName      string        `db:"first_name"`
 	LastName       string        `db:"last_name"`
 	PhoneNumber    string        `db:"phone_number"`
@@ -27,11 +27,11 @@ const (
 	UserAccountLockedStatus = "locked"
 )
 
-func (db *DB) InsertUser(user *User, tx *sql.Tx) (int, error) {
+func (db *DB) InsertUser(user *User, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var id int
+	var id string
 	query := `
 		INSERT INTO users (first_name, last_name, phone_number, gender, email, hashed_password)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -47,7 +47,7 @@ func (db *DB) InsertUser(user *User, tx *sql.Tx) (int, error) {
 			user.HashedPassword,
 		).Scan(&id)
 		if err != nil {
-			return 0, err
+			return "", err
 		}
 	} else {
 		err := db.GetContext(ctx, &id, query,
@@ -59,14 +59,14 @@ func (db *DB) InsertUser(user *User, tx *sql.Tx) (int, error) {
 			user.HashedPassword,
 		)
 		if err != nil {
-			return 0, err
+			return "", err
 		}
 	}
 
 	return id, nil
 }
 
-func (db *DB) GetUser(id int) (*User, bool, error) {
+func (db *DB) GetUser(id string) (*User, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -113,7 +113,7 @@ func (db *DB) CheckIfPhoneNumberExist(phone_number string) (bool, error) {
 	return exists, nil
 }
 
-func (db *DB) UpdateUserHashedPassword(id int, hashedPassword string) error {
+func (db *DB) UpdateUserHashedPassword(id string, hashedPassword string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -123,7 +123,7 @@ func (db *DB) UpdateUserHashedPassword(id int, hashedPassword string) error {
 	return err
 }
 
-func (db *DB) SetAccountPin(id int, pin string) error {
+func (db *DB) SetAccountPin(id string, pin string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -133,7 +133,7 @@ func (db *DB) SetAccountPin(id int, pin string) error {
 	return err
 }
 
-func (db *DB) UserLockAccount(id int) error {
+func (db *DB) UserLockAccount(id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 

@@ -20,7 +20,7 @@ import (
 func (wk *Worker) CreditWorker() {
 	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
 		GroupId: transferCreditGroupID,
-		Topic:   transferCreditTopic,
+		Topic:   TransferCreditTopic,
 	})
 
 	if err != nil {
@@ -37,7 +37,7 @@ func (wk *Worker) CreditWorker() {
 			success := wk.creditAccount(&transferReq)
 			if success {
 				// Produce message the success worker can mark the transaction as successful
-				wk.kafkaStream.ProduceMessage(transferSuccessTopic, string(e.Value))
+				wk.kafkaStream.ProduceMessage(TransferSuccessTopic, string(e.Value))
 			}
 		case kafka.Error:
 			log.Printf("Error: %v\n", e)
@@ -59,8 +59,8 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 	go func() {
 		_, err = wk.db.CreateAccountLog(&database.AccountLog{
 			UserID:      transferReq.RecipientID,
-			Type:        database.AccountLogTypeTransaction,
-			TypeId:      transferReq.ID,
+			Entity:      database.AccountLogTransactionEntity,
+			EntityId:    transferReq.ID,
 			Description: database.AccountLogTransactionCreditDescription,
 		})
 

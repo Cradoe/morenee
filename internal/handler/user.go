@@ -68,8 +68,8 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 	go func() {
 		_, err = h.db.CreateAccountLog(&database.AccountLog{
 			UserID:      user.ID,
-			Type:        database.AccountLogTypeUser,
-			TypeId:      user.ID,
+			Entity:      database.AccountLogUserEntity,
+			EntityId:    user.ID,
 			Description: database.AccountLogUserPinChangeDescription,
 		})
 

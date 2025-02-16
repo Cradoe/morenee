@@ -15,7 +15,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// global level functions, helpers, configs, etc, are exposed to the application
+// Essential services and resources are exposed to the application
 // this makes it possible for methods to have access to these items and when they need them
 type Application struct {
 	Config       config.Config
