@@ -97,11 +97,11 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 
 	// log operation
 	go func() {
-		_, err = wk.db.CreateAccountLog(&database.AccountLog{
+		_, err = wk.db.CreateActivityLog(&database.ActivityLog{
 			UserID:      transferReq.SenderID,
-			Entity:      database.AccountLogTransactionEntity,
+			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
-			Description: database.AccountLogTransactionDebitDescription,
+			Description: database.ActivityLogTransactionDebitDescription,
 		})
 
 		if err != nil {
@@ -116,5 +116,24 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 }
 
 func (wk *Worker) processFailedDebit(transferReq *handler.InitiatedTransfer) bool {
+	// When debit fails, we would mark the transaction status as failed
+
+	_, err := wk.db.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusFailed)
+	if err != nil {
+		log.Printf("Error marking transaction as failed: %v", err)
+		return false
+	}
+	// create an activity log to this effect
+	_, err = wk.db.CreateActivityLog(&database.ActivityLog{
+		UserID:      transferReq.SenderID,
+		Entity:      database.ActivityLogTransactionEntity,
+		EntityId:    transferReq.ID,
+		Description: database.ActivityLogTransactionFailedDebitDescription,
+	})
+
+	if err != nil {
+		log.Printf("Error logging failed transaction action: %v", err)
+	}
+
 	return true
 }

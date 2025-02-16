@@ -63,11 +63,11 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 	}
 
 	go func() {
-		_, err = wk.db.CreateAccountLog(&database.AccountLog{
+		_, err = wk.db.CreateActivityLog(&database.ActivityLog{
 			UserID:      transferReq.SenderID,
-			Entity:      database.AccountLogTransactionEntity,
+			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
-			Description: database.AccountLogTransactionSuccessDescription,
+			Description: database.ActivityLogTransactionSuccessDescription,
 		})
 
 		if err != nil {

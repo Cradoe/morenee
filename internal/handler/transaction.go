@@ -323,11 +323,11 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
-		_, err = h.db.CreateAccountLog(&database.AccountLog{
+		_, err = h.db.CreateActivityLog(&database.ActivityLog{
 			UserID:      sender.ID,
-			Entity:      database.AccountLogTransactionEntity,
+			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transaction.ID,
-			Description: database.AccountLogTransactionInitiatedDescription,
+			Description: database.ActivityLogTransactionInitiatedDescription,
 		})
 
 		if err != nil {

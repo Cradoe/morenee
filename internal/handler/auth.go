@@ -151,11 +151,11 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	}
 
 	go func() {
-		_, err = h.db.CreateAccountLog(&database.AccountLog{
+		_, err = h.db.CreateActivityLog(&database.ActivityLog{
 			UserID:      userID,
-			Entity:      database.AccountLogUserEntity,
+			Entity:      database.ActivityLogUserEntity,
 			EntityId:    userID,
-			Description: database.AccountLogUserRegistrationDescription,
+			Description: database.ActivityLogUserRegistrationDescription,
 		})
 
 		if err != nil {
@@ -212,11 +212,11 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 		if !passwordMatches {
 			go func() {
-				_, err = h.db.CreateAccountLog(&database.AccountLog{
+				_, err = h.db.CreateActivityLog(&database.ActivityLog{
 					UserID:      user.ID,
-					Entity:      database.AccountLogUserEntity,
+					Entity:      database.ActivityLogUserEntity,
 					EntityId:    user.ID,
-					Description: database.AccountLogFailedLoginDescription,
+					Description: database.ActivityLogFailedLoginDescription,
 				})
 
 				if err != nil {
@@ -256,11 +256,11 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		_, err = h.db.CreateAccountLog(&database.AccountLog{
+		_, err = h.db.CreateActivityLog(&database.ActivityLog{
 			UserID:      user.ID,
-			Entity:      database.AccountLogUserEntity,
+			Entity:      database.ActivityLogUserEntity,
 			EntityId:    user.ID,
-			Description: database.AccountLogUserLoginDescription,
+			Description: database.ActivityLogUserLoginDescription,
 		})
 
 		if err != nil {

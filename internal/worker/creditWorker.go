@@ -67,11 +67,11 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 
 	// log operation
 	go func() {
-		_, err = wk.db.CreateAccountLog(&database.AccountLog{
+		_, err = wk.db.CreateActivityLog(&database.ActivityLog{
 			UserID:      transferReq.RecipientID,
-			Entity:      database.AccountLogTransactionEntity,
+			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
-			Description: database.AccountLogTransactionCreditDescription,
+			Description: database.ActivityLogTransactionCreditDescription,
 		})
 
 		if err != nil {

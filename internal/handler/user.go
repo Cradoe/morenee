@@ -66,11 +66,11 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 	}
 
 	go func() {
-		_, err = h.db.CreateAccountLog(&database.AccountLog{
+		_, err = h.db.CreateActivityLog(&database.ActivityLog{
 			UserID:      user.ID,
-			Entity:      database.AccountLogUserEntity,
+			Entity:      database.ActivityLogUserEntity,
 			EntityId:    user.ID,
-			Description: database.AccountLogUserPinChangeDescription,
+			Description: database.ActivityLogUserPinChangeDescription,
 		})
 
 		if err != nil {
