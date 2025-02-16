@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/stream"
 )
@@ -8,6 +10,7 @@ import (
 type Worker struct {
 	kafkaStream *stream.KafkaStream
 	db          *database.DB
+	ctx         context.Context
 }
 
 const (
@@ -39,9 +42,10 @@ const (
 
 // Our workers typically needs access to database and kafka event stream
 // worker-specific dependency can be passed as argument to the worker
-func New(kafkaStream *stream.KafkaStream, db *database.DB) *Worker {
+func New(kafkaStream *stream.KafkaStream, db *database.DB, ctx context.Context) *Worker {
 	return &Worker{
 		kafkaStream: kafkaStream,
 		db:          db,
+		ctx:         ctx,
 	}
 }

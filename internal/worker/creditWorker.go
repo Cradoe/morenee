@@ -26,28 +26,36 @@ func (wk *Worker) CreditWorker() {
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
-	for {
-		event := consumer.Poll(100)
-		switch e := event.(type) {
-		case *kafka.Message:
-			message := e.Value
-			var transferReq handler.InitiatedTransfer
-			json.Unmarshal(message, &transferReq)
+	defer consumer.Close()
 
-			success := wk.creditAccount(&transferReq)
-			if success {
-				// Produce message the success worker can mark the transaction as successful
-				wk.kafkaStream.ProduceMessage(TransferSuccessTopic, string(e.Value))
+	for {
+		select {
+		case <-wk.ctx.Done():
+			log.Println("CreditWorker received cancellation signal, shutting down...")
+			return
+		default:
+			// Poll for events
+			event := consumer.Poll(100)
+			switch e := event.(type) {
+			case *kafka.Message:
+				message := e.Value
+				var transferReq handler.InitiatedTransfer
+				json.Unmarshal(message, &transferReq)
+
+				success := wk.creditAccount(&transferReq)
+				if success {
+					// Produce message so the success worker can mark the transaction as successful
+					wk.kafkaStream.ProduceMessage(TransferSuccessTopic, string(e.Value))
+				}
+			case kafka.Error:
+				log.Printf("Error: %v\n", e)
+			case *kafka.AssignedPartitions:
+				consumer.Assign(e.Partitions)
+			case *kafka.RevokedPartitions:
+				consumer.Unassign()
 			}
-		case kafka.Error:
-			log.Printf("Error: %v\n", e)
-		case *kafka.AssignedPartitions:
-			consumer.Assign(e.Partitions)
-		case *kafka.RevokedPartitions:
-			consumer.Unassign()
 		}
 	}
-
 }
 
 func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {

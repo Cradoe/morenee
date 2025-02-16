@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/cradoe/morenee/internal/context"
@@ -40,13 +41,15 @@ const (
 
 type transactionHandler struct {
 	db         *database.DB
+	wg         *sync.WaitGroup
 	errHandler *errHandler.ErrorRepository
 	kafka      *stream.KafkaStream
 }
 
-func NewTransactionHandler(db *database.DB, errHandler *errHandler.ErrorRepository, kafka *stream.KafkaStream) *transactionHandler {
+func NewTransactionHandler(db *database.DB, wg *sync.WaitGroup, errHandler *errHandler.ErrorRepository, kafka *stream.KafkaStream) *transactionHandler {
 	return &transactionHandler{
 		db:         db,
+		wg:         wg,
 		errHandler: errHandler,
 		kafka:      kafka,
 	}
@@ -295,9 +298,18 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	}
 
 	// Produce message so that the debit worker can debit the sender
-	go h.kafka.ProduceMessage(transferDebitTopic, string(jsonMessage))
-
+	h.wg.Add(1)
 	go func() {
+		defer h.wg.Done()
+		err := h.kafka.ProduceMessage(transferDebitTopic, string(jsonMessage))
+		if err != nil {
+			log.Printf("Error producing message: %v", err)
+		}
+	}()
+
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
 		_, err = h.db.CreateAccountLog(&database.AccountLog{
 			UserID:      sender.ID,
 			Entity:      database.AccountLogTransactionEntity,

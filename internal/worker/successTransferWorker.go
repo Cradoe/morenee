@@ -23,28 +23,36 @@ func (wk *Worker) SuccessTransferWorker() {
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
-	for {
-		event := consumer.Poll(100) // Poll every 100ms
-		switch e := event.(type) {
-		case *kafka.Message:
-			message := e.Value
-			var transferReq handler.InitiatedTransfer
-			json.Unmarshal(message, &transferReq)
+	defer consumer.Close() // Ensure cleanup
 
-			success := wk.completeTransferOperation(&transferReq)
-			if success {
-				// send notifications to the sender and receiver
-				log.Printf("Transfer completed successfully: %v", transferReq)
+	for {
+		select {
+		case <-wk.ctx.Done():
+			log.Println("SuccessTransferWorker received cancellation signal, shutting down...")
+			return
+		default:
+			// Poll for Kafka events
+			event := consumer.Poll(100)
+			switch e := event.(type) {
+			case *kafka.Message:
+				message := e.Value
+				var transferReq handler.InitiatedTransfer
+				json.Unmarshal(message, &transferReq)
+
+				success := wk.completeTransferOperation(&transferReq)
+				if success {
+					// Send notifications to the sender and receiver
+					log.Printf("Transfer completed successfully: %v", transferReq)
+				}
+			case kafka.Error:
+				log.Printf("Error: %v\n", e)
+			case *kafka.AssignedPartitions:
+				consumer.Assign(e.Partitions)
+			case *kafka.RevokedPartitions:
+				consumer.Unassign()
 			}
-		case kafka.Error:
-			log.Printf("Error: %v\n", e)
-		case *kafka.AssignedPartitions:
-			consumer.Assign(e.Partitions)
-		case *kafka.RevokedPartitions:
-			consumer.Unassign()
 		}
 	}
-
 }
 
 func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransfer) bool {

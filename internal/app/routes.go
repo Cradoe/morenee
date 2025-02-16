@@ -37,7 +37,7 @@ func (app *Application) routes() http.Handler {
 	mux.Handle("GET /wallet/details", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletDetails)))
 
 	// Transaction routes
-	transcHandler := handler.NewTransactionHandler(app.DB, app.errorHandler, app.Kafka)
+	transcHandler := handler.NewTransactionHandler(app.DB, &app.WG, app.errorHandler, app.Kafka)
 	mux.Handle("POST /transactions/send-money", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(transcHandler.HandleTransferMoney)))
 
 	// we need to handle all other routes that are not defined in the mux.

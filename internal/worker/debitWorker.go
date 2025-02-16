@@ -26,31 +26,39 @@ func (wk *Worker) DebitWorker() {
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
+	defer consumer.Close()
+
 	for {
-		event := consumer.Poll(100)
-		switch e := event.(type) {
-		case *kafka.Message:
-			message := e.Value
-			log.Printf("Debit message received on %s: %s\n", e.TopicPartition, string(e.Value))
+		select {
+		case <-wk.ctx.Done():
+			log.Println("DebitWorker received cancellation signal, shutting down...")
+			return
+		default:
+			// Poll for events
+			event := consumer.Poll(100)
+			switch e := event.(type) {
+			case *kafka.Message:
+				message := e.Value
+				log.Printf("Debit message received on %s: %s\n", e.TopicPartition, string(e.Value))
 
-			var transferReq handler.InitiatedTransfer
-			json.Unmarshal(message, &transferReq)
+				var transferReq handler.InitiatedTransfer
+				json.Unmarshal(message, &transferReq)
 
-			success := wk.debitAccount(&transferReq)
-			if success {
-				log.Printf("Debit completed successfully: %v", transferReq)
-				// Produce message so that the credit worker can credit the receiver
-				wk.kafkaStream.ProduceMessage(TransferCreditTopic, string(e.Value))
+				success := wk.debitAccount(&transferReq)
+				if success {
+					log.Printf("Debit completed successfully: %v", transferReq)
+					// Produce message so that the credit worker can credit the receiver
+					wk.kafkaStream.ProduceMessage(TransferCreditTopic, string(e.Value))
+				}
+			case kafka.Error:
+				log.Printf("Error: %v\n", e)
+			case *kafka.AssignedPartitions:
+				consumer.Assign(e.Partitions)
+			case *kafka.RevokedPartitions:
+				consumer.Unassign()
 			}
-		case kafka.Error:
-			log.Printf("Error: %v\n", e)
-		case *kafka.AssignedPartitions:
-			consumer.Assign(e.Partitions)
-		case *kafka.RevokedPartitions:
-			consumer.Unassign()
 		}
 	}
-
 }
 
 func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
