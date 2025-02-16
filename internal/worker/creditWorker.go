@@ -82,5 +82,24 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 		}
 	}()
 
+	// check and lock account if balance has exceeded balance limit
+	go func() {
+		wallet, found, err := wk.db.GetWallet(transferReq.RecipientWalletID)
+		if err != nil {
+			log.Printf("Error getting account limit: %v", err)
+		}
+
+		if !found {
+			return
+		}
+
+		if wallet.Balance > wallet.MaxBalance {
+			err = wk.db.LockWallet(transferReq.RecipientWalletID)
+			if err != nil {
+				log.Printf("Error holding recipient account over max balance limit: %v", err)
+			}
+		}
+	}()
+
 	return true
 }

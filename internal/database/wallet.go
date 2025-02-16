@@ -24,6 +24,7 @@ type Wallet struct {
 
 const (
 	WalletActiveStatus = "active"
+	WalletOnHoldStatus = "on-hold"
 )
 
 const (
@@ -65,16 +66,16 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 	return id, nil
 }
 
-func (db *DB) GetWalletBalance(userID string) (*Wallet, error) {
+func (db *DB) GetWalletBalance(id string) (*Wallet, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	var wallet Wallet
 
 	query := `
-        SELECT balance, currency FROM wallets WHERE user_id=$1 AND deleted_at IS NULL`
+        SELECT user_id, balance, currency FROM wallets WHERE id=$1 AND deleted_at IS NULL`
 
-	err := db.GetContext(ctx, &wallet, query, userID)
+	err := db.GetContext(ctx, &wallet, query, id)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -86,17 +87,17 @@ func (db *DB) GetWalletBalance(userID string) (*Wallet, error) {
 	return &wallet, nil
 }
 
-func (db *DB) GetWalletDetails(userID string) (*Wallet, bool, error) {
+func (db *DB) GetWalletsByUserId(userID string) ([]Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var wallet Wallet
+	var wallets []Wallet
 
 	query := `
-        SELECT id, balance, currency, account_number, status, single_transfer_limit, daily_transfer_limit,
-		 created_at FROM wallets WHERE user_id=$1 AND deleted_at IS NULL`
+        SELECT id, balance, currency, account_number, status, single_transfer_limit, daily_transfer_limit, 
+		max_balance, created_at FROM wallets WHERE user_id=$1 AND deleted_at IS NULL`
 
-	err := db.GetContext(ctx, &wallet, query, userID)
+	err := db.SelectContext(ctx, &wallets, query, userID)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -105,19 +106,20 @@ func (db *DB) GetWalletDetails(userID string) (*Wallet, bool, error) {
 		return nil, false, err
 	}
 
-	return &wallet, true, nil
+	return wallets, true, nil
 }
 
-func (db *DB) GetWalletLimits(walletID string) (*Wallet, bool, error) {
+func (db *DB) GetWallet(id string) (*Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	var wallet Wallet
 
 	query := `
-        SELECT single_transfer_limit, daily_transfer_limit FROM wallets WHERE id=$1 AND deleted_at IS NULL`
+        SELECT id, user_id, balance, currency, account_number, status, single_transfer_limit, daily_transfer_limit, 
+		max_balance, created_at FROM wallets WHERE id=$1 AND deleted_at IS NULL`
 
-	err := db.GetContext(ctx, &wallet, query, walletID)
+	err := db.GetContext(ctx, &wallet, query, id)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -239,4 +241,14 @@ func (db *DB) CreditWallet(walletID string, amount float64) (bool, error) {
 
 	return true, nil
 
+}
+
+func (db *DB) LockWallet(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	query := `UPDATE wallets SET status = $1 WHERE id = $2`
+
+	_, err := db.ExecContext(ctx, query, WalletOnHoldStatus, id)
+	return err
 }

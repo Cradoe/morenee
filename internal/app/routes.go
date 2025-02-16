@@ -33,8 +33,9 @@ func (app *Application) routes() http.Handler {
 
 	// Wallet routes
 	walletHandler := handler.NewWalletHandler(app.DB, app.errorHandler)
-	mux.Handle("GET /wallet/balance", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletBalance)))
-	mux.Handle("GET /wallet/details", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletDetails)))
+	mux.Handle("GET /wallets", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleUserWallets)))
+	mux.Handle("GET /wallets/{id}/details", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletDetails)))
+	mux.Handle("GET /wallets/{id}/balance", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletBalance)))
 
 	// Transaction routes
 	transcHandler := handler.NewTransactionHandler(app.DB, &app.WG, app.errorHandler, app.Kafka)

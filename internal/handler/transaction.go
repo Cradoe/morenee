@@ -21,9 +21,10 @@ import (
 )
 
 var (
-	ErrInActiveRecipientAccount = errors.New("we can't process transfer into the recipient's account")
-	ErrAttemptForSameAccount    = errors.New("your can't transfer to your own account")
-
+	ErrInActiveRecipientAccount    = errors.New("we can't process transfer into the recipient's account")
+	ErrAttemptForSameAccount       = errors.New("your can't transfer to your own account")
+	ErrTransactionDenied           = errors.New("transaction denied")
+	ErrIncompatibleWalletCurrency  = errors.New("transaction can only happen between wallets of the same currency")
 	ErrInActiveSenderAccount       = errors.New("your account cannot process transaction at this time")
 	ErrInsufficientBalance         = errors.New("insufficient balance")
 	ErrDailyLimitExceeded          = errors.New("daily limit exceeded, upgrade your account")
@@ -76,6 +77,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// Step 5: create a pending transaction and initialize a background worker to handle the rest
 
 	type TransferFundsInput struct {
+		SenderWalletID  string              `json:"sender_wallet_id"`
 		AccountNumber   string              `json:"account_number"`
 		Amount          float64             `json:"amount"`
 		ReferenceNumber string              `json:"reference_number"`
@@ -124,6 +126,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	input.Validator.Check(input.Amount > 0, "Amount is required")
 
 	input.Validator.Check(validator.NotBlank(input.ReferenceNumber), "Reference number is required")
+	input.Validator.Check(validator.NotBlank(input.SenderWalletID), "Sender wallet id is required")
 	input.Validator.Check(validator.NotBlank(input.AccountNumber), "Recipient account number is required")
 
 	if input.Validator.HasErrors() {
@@ -162,7 +165,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		recipientWallet, found, err := h.db.FindWalletByAccountNumber(input.AccountNumber)
 
 		if !found {
-			errCh <- fmt.Errorf("wallet_not_found")
+			errCh <- fmt.Errorf("recipient_not_found")
 			return
 		}
 
@@ -177,7 +180,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	}()
 
 	go func() {
-		senderWallet, found, err := h.db.GetWalletDetails(sender.ID)
+		senderWallet, found, err := h.db.GetWallet(input.SenderWalletID)
 		if !found {
 			errCh <- fmt.Errorf("wallet_not_found")
 			return
@@ -198,8 +201,11 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 
 	select {
 	case err := <-errCh:
-		if err.Error() == "wallet_not_found" {
+		if err.Error() == "recipient_not_found" {
 			response.JSONErrorResponse(w, nil, ErrRecipientNotFound.Error(), http.StatusUnprocessableEntity, nil)
+			return
+		} else if err.Error() == "wallet_not_found" {
+			response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
 			return
 		}
 		h.errHandler.ServerError(w, r, err)
@@ -209,13 +215,21 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 
 	select {
 	case err := <-errCh:
-		if err.Error() == "wallet_not_found" {
-			response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
-			return
-		}
 		h.errHandler.ServerError(w, r, err)
 		return
 	case senderWallet = <-senderCh:
+	}
+
+	// check if logged in user is the owner of the wallet
+	if sender.ID != senderWallet.UserID {
+		response.JSONErrorResponse(w, nil, ErrTransactionDenied.Error(), http.StatusForbidden, nil)
+		return
+	}
+
+	// check if it's an attempt to onself
+	if recipientWallet.Currency != senderWallet.Currency {
+		response.JSONErrorResponse(w, nil, ErrIncompatibleWalletCurrency.Error(), http.StatusUnprocessableEntity, nil)
+		return
 	}
 
 	// check if it's an attempt to onself
@@ -257,13 +271,12 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Here, we can perform a quick lookups such as simple fraud alert, suspicious activities , etc
+	// Here, we can perform quick lookups such as simple fraud alert, suspicious activities , etc
 	// ...
 	// skipping this because it involves machine learning
 	// ...
 
 	// Step 5: create a pending transaction and initialize a background worker to handle the rest
-	log.Println("ddd", recipientWallet.ID)
 	newTrans := &database.Transaction{
 		SenderWalletID:    senderWallet.ID,
 		RecipientWalletID: recipientWallet.ID,

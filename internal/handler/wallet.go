@@ -50,9 +50,18 @@ func (h *walletHandler) generateWallet(user_id string, phone_number string, tx *
 func (h *walletHandler) HandleWalletBalance(w http.ResponseWriter, r *http.Request) {
 	user := context.ContextGetAuthenticatedUser((r))
 
-	wallet, err := h.db.GetWalletBalance(user.ID)
+	walletID := r.PathValue("id")
+
+	wallet, err := h.db.GetWalletBalance(walletID)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	// check if logged in user is the owner of the wallet
+	if user.ID != wallet.UserID {
+		message := "Access denied"
+		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
 		return
 	}
 
@@ -72,7 +81,45 @@ func (h *walletHandler) HandleWalletBalance(w http.ResponseWriter, r *http.Reque
 func (h *walletHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Request) {
 	user := context.ContextGetAuthenticatedUser((r))
 
-	wallet, found, err := h.db.GetWalletDetails(user.ID)
+	walletID := r.PathValue("id")
+
+	wallet, found, err := h.db.GetWallet(walletID)
+	if !found {
+		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
+		return
+	}
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	// check if logged in user is the owner of the wallet
+	if user.ID != wallet.UserID {
+		message := "Access denied"
+		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
+		return
+	}
+
+	message := "Wallet details fetched successfully"
+
+	data := map[string]any{
+		"balance":        wallet.Balance,
+		"currency":       wallet.Currency,
+		"account_number": wallet.AccountNumber,
+		"created_at":     wallet.CreatedAt,
+		"status":         wallet.Status,
+	}
+	err = response.JSONOkResponse(w, data, message, nil)
+
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+	}
+}
+
+func (h *walletHandler) HandleUserWallets(w http.ResponseWriter, r *http.Request) {
+	user := context.ContextGetAuthenticatedUser((r))
+
+	wallets, found, err := h.db.GetWalletsByUserId(user.ID)
 	if !found {
 		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
 		return
@@ -84,11 +131,16 @@ func (h *walletHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Reque
 
 	message := "Wallet details successfully"
 
-	data := map[string]any{
-		"balance":        wallet.Balance,
-		"currency":       wallet.Currency,
-		"account_number": wallet.AccountNumber,
-		"created_at":     wallet.CreatedAt,
+	data := make([]map[string]any, len(wallets))
+	for i, wallet := range wallets {
+		data[i] = map[string]any{
+			"id":             wallet.ID,
+			"balance":        wallet.Balance,
+			"currency":       wallet.Currency,
+			"account_number": wallet.AccountNumber,
+			"created_at":     wallet.CreatedAt,
+			"status":         wallet.Status,
+		}
 	}
 	err = response.JSONOkResponse(w, data, message, nil)
 
