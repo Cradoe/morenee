@@ -44,8 +44,10 @@ func (wk *Worker) DebitWorker() {
 			}
 		case kafka.Error:
 			log.Printf("Error: %v\n", e)
-		default:
-			// Handle other events if needed
+		case *kafka.AssignedPartitions:
+			consumer.Assign(e.Partitions)
+		case *kafka.RevokedPartitions:
+			consumer.Unassign()
 		}
 	}
 
