@@ -100,10 +100,6 @@ func (mid *Middleware) Authenticate(next http.Handler) http.HandlerFunc {
 				}
 
 				userID := claims.Subject
-				if err != nil {
-					mid.errHandler.ServerError(w, r, err)
-					return
-				}
 
 				user, found, err := mid.DB.GetUser(userID)
 				if err != nil {
