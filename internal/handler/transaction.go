@@ -37,6 +37,29 @@ var (
 )
 
 const (
+	// TransactionActivityLogInitiatedDescription is used when a transaction is created and pending completion.
+	TransactionActivityLogInitiatedDescription = "Transaction initiated"
+
+	// TransactionActivityLogDebitDescription is used to log when a sender's wallet is debited successfully.
+	TransactionActivityLogDebitDescription = "Transaction debit"
+
+	// TransactionActivityLogCreditDescription is used to log when a recipient's wallet is credited successfully.
+	TransactionActivityLogCreditDescription = "Transaction credit"
+
+	// TransactionActivityLogFailedDebitDescription is used when a debit operation fails, potentially due to insufficient funds or errors.
+	TransactionActivityLogFailedDebitDescription = "Transaction debit failed"
+
+	// TransactionActivityLogFailedCreditDescription is used to log a failure to credit the recipient’s wallet or account.
+	TransactionActivityLogFailedCreditDescription = "Transaction could not credit recipient"
+
+	// TransactionActivityLogRevertedDescription is used when a previously failed transaction is reversed and the money is credited back to the sender.
+	TransactionActivityLogRevertedDescription = "Transaction reverted"
+
+	// TransactionActivityLogSuccessDescription is used to log the successful completion of a transaction.
+	TransactionActivityLogSuccessDescription = "Transaction success"
+)
+
+const (
 	transferDebitTopic = "transfer.debit"
 )
 
@@ -263,7 +286,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	}
 
 	// Check for daily limit
-	if exceeded, err := h.db.HasExceededDailyLimit(senderWallet.ID, input.Amount); err != nil {
+	if exceeded, err := h.db.HasExceededDailyLimit(senderWallet.ID, input.Amount, senderWallet.DailyTransferLimit); err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
 	} else if exceeded {
@@ -327,7 +350,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 			UserID:      sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transaction.ID,
-			Description: database.ActivityLogTransactionInitiatedDescription,
+			Description: TransactionActivityLogInitiatedDescription,
 		})
 
 		if err != nil {

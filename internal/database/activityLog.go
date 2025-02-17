@@ -5,7 +5,6 @@
 // ...
 // We used polymorphism to define entity and entity_id
 // This allow our table to be used for different part of the application
-// See https://..
 package database
 
 import (
@@ -24,7 +23,6 @@ type ActivityLog struct {
 	CreatedAt   time.Time `db:"created_at"`
 }
 
-// activity log entities
 const (
 	// ActivityLogTransactionEntity is used in actions that has to do with transactions and the transactions table
 	ActivityLogTransactionEntity = "transaction"
@@ -34,22 +32,6 @@ const (
 
 	// ActivityLogUserEntity is used in activites that has to do with user account and the users table
 	ActivityLogUserEntity = "user"
-)
-
-// possible descriptions
-const (
-	ActivityLogUserRegistrationDescription = "User registration"
-	ActivityLogUserPinChangeDescription    = "User pin change"
-	ActivityLogUserLoginDescription        = "User login"
-	ActivityLogFailedLoginDescription      = "Failed login"
-
-	ActivityLogTransactionInitiatedDescription   = "Transaction initiated"
-	ActivityLogTransactionDebitDescription       = "Transaction debit"
-	ActivityLogTransactionCreditDescription      = "Transaction credit"
-	ActivityLogTransactionFailedDebitDescription = "Transaction debit failed"
-	ActivityLogTransactionFailedDescription      = "Transaction failed"
-	ActivityLogTransactionRevertedDescription    = "Transaction reverted"
-	ActivityLogTransactionSuccessDescription     = "Transaction success"
 )
 
 func (db *DB) CreateActivityLog(log *ActivityLog) (*ActivityLog, error) {
@@ -77,20 +59,39 @@ func (db *DB) CreateActivityLog(log *ActivityLog) (*ActivityLog, error) {
 	return &trans, nil
 }
 
-// In order to prevent try-and-luck access into user's account
-// ... we implement a feature to check for 3 consequtive failed login requests
-// we can then temporarily lock the account for such occasion
-func (db *DB) CountFailedLoginAttempts(user_id string) int {
+// CountConsecutiveFailedLoginAttempts counts the number of consecutive failed login attempts for a user.
+// This function is used to determine if a user’s account should be temporarily locked after 3 consecutive failures.
+// It checks the most recent login attempts in descending order and counts failures until a successful login or the limit is reached.
+func (db *DB) CountConsecutiveFailedLoginAttempts(userID, action_desc string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var count int
+	var descriptions []string
 
-	query := `SELECT count(user_id) FROM account_logs WHERE user_id = $1 AND entity = $2 AND description = $3`
-
-	err := db.GetContext(ctx, &count, query, user_id, ActivityLogUserEntity, ActivityLogFailedLoginDescription)
-	if errors.Is(err, sql.ErrNoRows) {
+	// Query the most recent login attempts for the user, limiting to the last 3 entries
+	query := `
+		SELECT description 
+		FROM account_logs 
+		WHERE user_id = $1 AND entity = $2 
+		ORDER BY created_at DESC 
+		LIMIT 3
+	`
+	err := db.SelectContext(ctx, &descriptions, query, userID, ActivityLogUserEntity)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0
+		}
 		return 0
+	}
+
+	// Count consecutive failed logins
+	count := 0
+	for _, desc := range descriptions {
+		if desc == action_desc {
+			count++
+		} else {
+			break // Stop counting if we encounter a non-failed login
+		}
 	}
 
 	return count

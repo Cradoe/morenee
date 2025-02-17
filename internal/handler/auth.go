@@ -155,7 +155,7 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 			UserID:      userID,
 			Entity:      database.ActivityLogUserEntity,
 			EntityId:    userID,
-			Description: database.ActivityLogUserRegistrationDescription,
+			Description: UserActivityLogRegistrationDescription,
 		})
 
 		if err != nil {
@@ -216,7 +216,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 					UserID:      user.ID,
 					Entity:      database.ActivityLogUserEntity,
 					EntityId:    user.ID,
-					Description: database.ActivityLogFailedLoginDescription,
+					Description: UserActivityLogFailedLoginDescription,
 				})
 
 				if err != nil {
@@ -225,10 +225,23 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			}()
 
 			//  if password is not correct, log, that, and lock the account after 3 consecutive failed attempts
-			count := h.db.CountFailedLoginAttempts(user.ID)
+			count := h.db.CountConsecutiveFailedLoginAttempts(user.ID, UserActivityLogFailedLoginDescription)
 			// check if we already have 2 failed login attempts before this one.
 			if count >= 2 {
 				go h.db.UserLockAccount(user.ID)
+
+				go func() {
+					_, err = h.db.CreateActivityLog(&database.ActivityLog{
+						UserID:      user.ID,
+						Entity:      database.ActivityLogUserEntity,
+						EntityId:    user.ID,
+						Description: UserActivityLogLockedAccountDescription,
+					})
+
+					if err != nil {
+						log.Printf("Error logging failed login action: %v", err)
+					}
+				}()
 
 				h.errHandler.FailedValidation(w, r, []string{"Account has been locked. Please contact support"})
 				return
@@ -260,7 +273,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			UserID:      user.ID,
 			Entity:      database.ActivityLogUserEntity,
 			EntityId:    user.ID,
-			Description: database.ActivityLogUserLoginDescription,
+			Description: UserActivityLogLoginDescription,
 		})
 
 		if err != nil {

@@ -20,11 +20,21 @@ type Transaction struct {
 	UpdatedAt         sql.NullTime   `db:"updated_at"`
 }
 
-// define possible transaction status
 const (
-	TransactionStatusPending   = "pending"
+	// TransactionStatusPending indicates that the transaction has been initiated but not yet completed.
+	TransactionStatusPending = "pending"
+
+	// TransactionStatusCompleted indicates that the transaction has been successfully processed and finalized.
+	// No further action is required once this status is set.
 	TransactionStatusCompleted = "completed"
-	TransactionStatusFailed    = "failed"
+
+	// TransactionStatusFailed indicates that the transaction could not be completed successfully due to an error.
+	// This may be due to insufficient funds, system errors, or other failure conditions.
+	TransactionStatusFailed = "failed"
+
+	// TransactionStatusReversed indicates that a previously completed or failed transaction has been reversed.
+	// This status is typically used when funds are returned to the sender or adjustments are made to correct errors.
+	TransactionStatusReversed = "reversed"
 )
 
 func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (*Transaction, error) {
@@ -111,23 +121,33 @@ func (db *DB) FindTransactionByReference(reference_number string) (*Transaction,
 	return &trans, true, nil
 }
 
-func (db *DB) HasExceededDailyLimit(wallet_id string, amount float64) (bool, error) {
-	// ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	// defer cancel()
+// HasExceededDailyLimit checks whether a user has exceeded their daily debit limit based on their transaction history.
+// It sums all transactions initiated by the user for the current day with statuses "completed" or "pending".
+// The function then compares the total debit amount with the provided daily limit. If the total amount (including the current transaction) exceeds the limit, it returns true; otherwise, false.
+func (db *DB) HasExceededDailyLimit(walletID string, intending_amount float64, dailyLimit float64) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
 
-	// var trans Transaction
+	var totalDebit float64
 
-	// query := `
-	//     SELECT reference_number, status, created_at FROM transactions WHERE reference_number=$1`
+	// Query to sum the amount of all "completed" or "pending" transactions for the current day
+	query := `
+		SELECT COALESCE(SUM(amount), 0)
+		FROM transactions
+		WHERE sender_wallet_id = $1 
+		AND status IN ($2, $3)
+		AND DATE(created_at) = CURRENT_DATE
+	`
 
-	// err := db.GetContext(ctx, &trans, query, reference_number)
+	err := db.GetContext(ctx, &totalDebit, query, walletID, TransactionStatusCompleted, TransactionStatusPending)
+	if err != nil {
+		return false, err
+	}
 
-	// if err != nil {
-	// 	if errors.Is(err, sql.ErrNoRows) {
-	// 		return nil, false, nil
-	// 	}
-	// 	return nil, false, err
-	// }
+	// Check if the total debit (including the new debit attempt) exceeds the daily limit
+	if totalDebit+intending_amount > dailyLimit {
+		return true, nil
+	}
 
 	return false, nil
 }

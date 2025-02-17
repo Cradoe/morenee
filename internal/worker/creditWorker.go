@@ -8,8 +8,11 @@
 package worker
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/cradoe/morenee/internal/database"
@@ -28,6 +31,9 @@ func (wk *Worker) CreditWorker() {
 	}
 	defer consumer.Close()
 
+	maxRetries := 5
+	baseRetryDelay := time.Second * 2
+
 	for {
 		select {
 		case <-wk.ctx.Done():
@@ -38,15 +44,41 @@ func (wk *Worker) CreditWorker() {
 			event := consumer.Poll(100)
 			switch e := event.(type) {
 			case *kafka.Message:
-				message := e.Value
-				var transferReq handler.InitiatedTransfer
-				json.Unmarshal(message, &transferReq)
+				// We use a goroutine to process each message independently
+				// This is to ensure that the worker remains non-blocking and can continue
+				// processing new messages.
+				// Delay could be caused by network or retry policy,
+				// using goroutine here is an option to make sure our worker can
+				// attend to other requests while retries are handled in the background.
+				go func(msg *kafka.Message) {
+					message := msg.Value
+					var transferReq handler.InitiatedTransfer
+					json.Unmarshal(message, &transferReq)
 
-				success := wk.creditAccount(&transferReq)
-				if success {
-					// Produce message so the success worker can mark the transaction as successful
-					wk.kafkaStream.ProduceMessage(TransferSuccessTopic, string(e.Value))
-				}
+					retryCount := 0
+					for retryCount < maxRetries {
+						success := wk.creditAccount(&transferReq)
+						if success {
+							// Produce message so the success worker can mark the transaction as successful
+							wk.kafkaStream.ProduceMessage(TransferSuccessTopic, string(e.Value))
+							return
+						}
+
+						// we can implement retry mechanism when credit fails
+						// this will be done with exponential backoff
+						// we must have also confirmed that the `db.CreditWallet` function uses database transaction mechanism
+						// with a rollback strategy for when something happen.
+						retryCount++
+						delay := time.Duration(retryCount) * baseRetryDelay
+						log.Printf("Credit attempt failed. Retrying in %v... (attempt %d/%d)\n", delay, retryCount, maxRetries)
+						time.Sleep(delay)
+					}
+
+					// Final failure handling
+					log.Printf("Failed to credit account after %d retries. Message: %s\n", maxRetries, message)
+
+					wk.processFailedCredit(&transferReq)
+				}(e)
 			case kafka.Error:
 				log.Printf("Error: %v\n", e)
 			case *kafka.AssignedPartitions:
@@ -71,7 +103,7 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 			UserID:      transferReq.RecipientID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
-			Description: database.ActivityLogTransactionCreditDescription,
+			Description: handler.TransactionActivityLogCreditDescription,
 		})
 
 		if err != nil {
@@ -100,6 +132,81 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 			}
 		}
 	}()
+
+	return true
+}
+
+// processFailedCredit handles the reversal of a failed credit transaction.
+//
+// When a credit transaction fails after multiple retry attempts, this function performs the following steps:
+// 1. Logs the failed credit attempt to create a record of the failure.
+// 2. Credits the money back to the sender’s wallet to ensure no loss of funds.
+// 3. Logs the successful reversal for transparency and tracking purposes.
+// 4. Marks the original transaction as "Reversed" to indicate its failure and refund status.
+// 5. Creates a new transaction record for the reversal to ensure proper audit trails.
+// 6. Logs the new reversal transaction to document the entire process.
+func (wk *Worker) processFailedCredit(transferReq *handler.InitiatedTransfer) bool {
+	// Log the failed credit attempt synchronously
+	_, err := wk.db.CreateActivityLog(&database.ActivityLog{
+		UserID:      transferReq.SenderID,
+		Entity:      database.ActivityLogTransactionEntity,
+		EntityId:    transferReq.ID,
+		Description: handler.TransactionActivityLogFailedCreditDescription,
+	})
+	if err != nil {
+		log.Printf("Error logging failed credit action: %v", err)
+	}
+
+	// Reverse the money to the sender
+	_, err = wk.db.CreditWallet(transferReq.SenderWalletID, transferReq.Amount)
+	if err != nil {
+		log.Printf("Error reversing money from failed credit: %v", err)
+		return false
+	}
+
+	// Log the successful credit reversal
+	_, err = wk.db.CreateActivityLog(&database.ActivityLog{
+		UserID:      transferReq.SenderID,
+		Entity:      database.ActivityLogTransactionEntity,
+		EntityId:    transferReq.ID,
+		Description: handler.TransactionActivityLogCreditDescription,
+	})
+	if err != nil {
+		log.Printf("Error logging credit reversal action: %v", err)
+	}
+
+	// Mark the original transaction as reversed
+	_, err = wk.db.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusReversed)
+	if err != nil {
+		log.Printf("Error marking transaction as reversed: %v", err)
+		return false
+	}
+
+	// Create a new transaction for the reversal
+	desc := fmt.Sprintf("Reversal of %f", transferReq.Amount)
+	newTrans := &database.Transaction{
+		SenderWalletID:    transferReq.SenderWalletID,
+		RecipientWalletID: transferReq.SenderWalletID, // sender is the recipient in a reversal
+		Amount:            transferReq.Amount,
+		ReferenceNumber:   transferReq.ReferenceNumber,
+		Description:       sql.NullString{String: desc, Valid: true},
+	}
+	transaction, err := wk.db.CreateTransaction(newTrans, nil)
+	if err != nil {
+		log.Printf("Error creating reversal transaction: %v", err)
+		return false
+	}
+
+	// Log the reversal transaction
+	_, err = wk.db.CreateActivityLog(&database.ActivityLog{
+		UserID:      transferReq.SenderID,
+		Entity:      database.ActivityLogTransactionEntity,
+		EntityId:    transaction.ID,
+		Description: handler.TransactionActivityLogRevertedDescription,
+	})
+	if err != nil {
+		log.Printf("Error logging reversal transaction action: %v", err)
+	}
 
 	return true
 }

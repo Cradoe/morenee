@@ -23,7 +23,13 @@ type User struct {
 }
 
 const (
+	// UserAccountActiveStatus indicates that the user's account is active and fully functional.
+	// The user can log in, perform transactions, and access all account features.
 	UserAccountActiveStatus = "active"
+
+	// UserAccountLockedStatus indicates that the user's account has been locked.
+	// This status may be used due to security reasons, such as multiple failed login attempts,
+	// suspicious activity, or administrative action. A locked account cannot be accessed until unlocked.
 	UserAccountLockedStatus = "locked"
 )
 

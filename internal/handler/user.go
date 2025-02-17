@@ -18,6 +18,24 @@ type userHandler struct {
 	errHandler *errHandler.ErrorRepository
 }
 
+const (
+	// UserActivityLogRegistrationDescription is used when a new user registers on the platform.
+	UserActivityLogRegistrationDescription = "User registration"
+
+	// UserActivityLogPinChangeDescription is used to log when a user changes their PIN for security purposes.
+	UserActivityLogPinChangeDescription = "User pin change"
+
+	// UserActivityLogLoginDescription is used when a user successfully logs into the platform.
+	UserActivityLogLoginDescription = "User login"
+
+	// UserActivityLogFailedLoginDescription is used when a login attempt fails, typically due to incorrect credentials.
+	UserActivityLogFailedLoginDescription = "Failed login"
+
+	// UserActivityLogLockedAccountDescription is used to log an activity where a user's account has been locked.
+	// This log entry can be triggered due to multiple failed login attempts, security concerns, or manual actions by administrators.
+	UserActivityLogLockedAccountDescription = "Locked account"
+)
+
 func NewUserHandler(db *database.DB, errHandler *errHandler.ErrorRepository) *userHandler {
 	return &userHandler{
 		db:         db,
@@ -70,7 +88,7 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 			UserID:      user.ID,
 			Entity:      database.ActivityLogUserEntity,
 			EntityId:    user.ID,
-			Description: database.ActivityLogUserPinChangeDescription,
+			Description: UserActivityLogPinChangeDescription,
 		})
 
 		if err != nil {

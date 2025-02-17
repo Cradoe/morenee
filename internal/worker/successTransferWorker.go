@@ -62,21 +62,16 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 		return false
 	}
 
-	go func() {
-		_, err = wk.db.CreateActivityLog(&database.ActivityLog{
-			UserID:      transferReq.SenderID,
-			Entity:      database.ActivityLogTransactionEntity,
-			EntityId:    transferReq.ID,
-			Description: database.ActivityLogTransactionSuccessDescription,
-		})
+	_, err = wk.db.CreateActivityLog(&database.ActivityLog{
+		UserID:      transferReq.SenderID,
+		Entity:      database.ActivityLogTransactionEntity,
+		EntityId:    transferReq.ID,
+		Description: handler.TransactionActivityLogSuccessDescription,
+	})
 
-		if err != nil {
-			log.Printf("Error logging debit action: %v", err)
-			// We should raise a critical error that notifies all concerned parties
-			// whenever we encountered failure in logging action.
-			// Logging is a key part of our system and should be treated as priority.
-		}
-	}()
+	if err != nil {
+		log.Printf("Error logging debit action: %v", err)
+	}
 
 	return true
 }

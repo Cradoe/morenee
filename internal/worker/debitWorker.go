@@ -64,7 +64,7 @@ func (wk *Worker) DebitWorker() {
 
 						// we can implement retry mechanism when debit fails
 						// this will be done with exponential backoff
-						// we must have also confirmed that the `wk.debitAccount` function uses database transaction mechanish
+						// we must have also confirmed that the `wk.debitAccount` function uses database transaction mechanism
 						// with a rollback strategy for when something happen.
 						retryCount++
 						delay := time.Duration(retryCount) * baseRetryDelay
@@ -101,7 +101,7 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 			UserID:      transferReq.SenderID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
-			Description: database.ActivityLogTransactionDebitDescription,
+			Description: handler.TransactionActivityLogDebitDescription,
 		})
 
 		if err != nil {
@@ -128,7 +128,7 @@ func (wk *Worker) processFailedDebit(transferReq *handler.InitiatedTransfer) boo
 		UserID:      transferReq.SenderID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
-		Description: database.ActivityLogTransactionFailedDebitDescription,
+		Description: handler.TransactionActivityLogFailedDebitDescription,
 	})
 
 	if err != nil {
