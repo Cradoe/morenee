@@ -6,23 +6,12 @@ import (
 
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/database"
-	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/response"
 )
 
-type walletHandler struct {
-	db         *database.DB
-	errHandler *errHandler.ErrorRepository
-}
+const BankName = "Mornee"
 
-func NewWalletHandler(db *database.DB, errHandler *errHandler.ErrorRepository) *walletHandler {
-	return &walletHandler{
-		db:         db,
-		errHandler: errHandler,
-	}
-}
-
-func (h *walletHandler) generateWallet(user_id string, phone_number string, tx *sql.Tx) (bool, error) {
+func (h *RouteHandler) generateWallet(user_id string, phone_number string, tx *sql.Tx) (*database.Wallet, error) {
 
 	// we don't have to manually check if account_number already exists because
 	// we've established that phone_number is unique in users table.
@@ -39,22 +28,22 @@ func (h *walletHandler) generateWallet(user_id string, phone_number string, tx *
 		}(),
 	}
 
-	_, err := h.db.CreateWallet(userWallet, tx)
+	_, err := h.DB.CreateWallet(userWallet, tx)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return true, nil
+	return userWallet, nil
 
 }
 
-func (h *walletHandler) HandleWalletBalance(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleWalletBalance(w http.ResponseWriter, r *http.Request) {
 	user := context.ContextGetAuthenticatedUser((r))
 
 	walletID := r.PathValue("id")
 
-	wallet, err := h.db.GetWalletBalance(walletID)
+	wallet, err := h.DB.GetWalletBalance(walletID)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -74,22 +63,22 @@ func (h *walletHandler) HandleWalletBalance(w http.ResponseWriter, r *http.Reque
 	err = response.JSONOkResponse(w, data, message, nil)
 
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 }
 
-func (h *walletHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Request) {
 	user := context.ContextGetAuthenticatedUser((r))
 
 	walletID := r.PathValue("id")
 
-	wallet, found, err := h.db.GetWallet(walletID)
+	wallet, found, err := h.DB.GetWallet(walletID)
 	if !found {
 		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -112,20 +101,20 @@ func (h *walletHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Reque
 	err = response.JSONOkResponse(w, data, message, nil)
 
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 }
 
-func (h *walletHandler) HandleUserWallets(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleUserWallets(w http.ResponseWriter, r *http.Request) {
 	user := context.ContextGetAuthenticatedUser((r))
 
-	wallets, found, err := h.db.GetWalletsByUserId(user.ID)
+	wallets, found, err := h.DB.GetWalletsByUserId(user.ID)
 	if !found {
 		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -145,6 +134,6 @@ func (h *walletHandler) HandleUserWallets(w http.ResponseWriter, r *http.Request
 	err = response.JSONOkResponse(w, data, message, nil)
 
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 }

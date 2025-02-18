@@ -18,34 +18,38 @@ func (app *Application) routes() http.Handler {
 
 	middlewareRepo := middleware.New(app.errorHandler, app.Logger, app.DB, &app.Config)
 
+	routeHandler := handler.NewRouteHandler(&handler.RouteHandler{
+		DB:           app.DB,
+		ErrHandler:   app.errorHandler,
+		Config:       &app.Config,
+		Mailer:       app.Mailer,
+		Helper:       app.helper,
+		Kafka:        app.Kafka,
+		FileUploader: app.FileUploader,
+	})
+
 	// Health-check route
-	healthHandler := handler.NewHealthCheckHandler(app.errorHandler)
-	mux.HandleFunc("GET /health", healthHandler.HandleHealthCheck)
+	mux.HandleFunc("GET /health", routeHandler.HandleHealthCheck)
 
 	// Auth routes
-	authHandler := handler.NewAuthHandler(app.DB, &app.Config, app.errorHandler)
-	mux.HandleFunc("POST /auth/register", authHandler.HandleAuthRegister)
-	mux.HandleFunc("POST /auth/login", authHandler.HandleAuthLogin)
+	mux.HandleFunc("POST /auth/register", routeHandler.HandleAuthRegister)
+	mux.HandleFunc("POST /auth/login", routeHandler.HandleAuthLogin)
 
 	// Account routes
-	accountHandler := handler.NewUserHandler(app.DB, app.errorHandler)
-	mux.Handle("PATCH /account/pin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(accountHandler.HandleSetAccountPin)))
-	mux.Handle("GET /account/profile", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(accountHandler.HandleUserProfile)))
-	mux.Handle("PATCH /account/profile-picture", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(accountHandler.HandleChangeProfilePicture)))
+	mux.Handle("PATCH /account/pin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleSetAccountPin)))
+	mux.Handle("GET /account/profile", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleUserProfile)))
+	mux.Handle("PATCH /account/profile-picture", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleChangeProfilePicture)))
 
 	// Wallet routes
-	walletHandler := handler.NewWalletHandler(app.DB, app.errorHandler)
-	mux.Handle("GET /wallets", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleUserWallets)))
-	mux.Handle("GET /wallets/{id}/details", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletDetails)))
-	mux.Handle("GET /wallets/{id}/balance", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(walletHandler.HandleWalletBalance)))
+	mux.Handle("GET /wallets", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleUserWallets)))
+	mux.Handle("GET /wallets/{id}/details", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleWalletDetails)))
+	mux.Handle("GET /wallets/{id}/balance", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleWalletBalance)))
 
 	// Transaction routes
-	transcHandler := handler.NewTransactionHandler(app.DB, &app.WG, app.errorHandler, app.Kafka)
-	mux.Handle("POST /transactions/send-money", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(transcHandler.HandleTransferMoney)))
+	mux.Handle("POST /transactions/send-money", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleTransferMoney)))
 
 	// utility routes
-	utilHandler := handler.NewUtilityHandler(app.errorHandler, app.FileUploader)
-	mux.HandleFunc("POST /utility/upload-file", utilHandler.HandleUploadFile)
+	mux.HandleFunc("POST /utility/upload-file", routeHandler.HandleUploadFile)
 
 	// we need to handle all other routes that are not defined in the mux.
 	// This is when user tries to access a route that does not exist

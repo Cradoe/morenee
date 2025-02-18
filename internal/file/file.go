@@ -22,7 +22,7 @@ func New(cloud_name, api_key, api_secret string) *FileUploader {
 	}
 }
 
-func (f *FileUploader) UploadFile(file_name string) (string, error) {
+func (f *FileUploader) UploadFile(fileName string) (string, error) {
 
 	cld, err := cloudinary.NewFromParams(f.cloud_name, f.api_key, f.api_secret)
 	if err != nil {
@@ -31,7 +31,7 @@ func (f *FileUploader) UploadFile(file_name string) (string, error) {
 
 	// Upload the file to Cloudinary
 	ctx := context.Background()
-	uploadResult, err := cld.Upload.Upload(ctx, file_name, uploader.UploadParams{})
+	uploadResult, err := cld.Upload.Upload(ctx, fileName, uploader.UploadParams{})
 
 	if err != nil {
 		return "", err

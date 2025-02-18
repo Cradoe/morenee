@@ -8,16 +8,10 @@ import (
 	"github.com/cradoe/gopass"
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/database"
-	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
 	"github.com/cradoe/morenee/internal/validator"
 )
-
-type userHandler struct {
-	db         *database.DB
-	errHandler *errHandler.ErrorRepository
-}
 
 const (
 	// UserActivityLogRegistrationDescription is used when a new user registers on the platform.
@@ -37,14 +31,7 @@ const (
 	UserActivityLogLockedAccountDescription = "Locked account"
 )
 
-func NewUserHandler(db *database.DB, errHandler *errHandler.ErrorRepository) *userHandler {
-	return &userHandler{
-		db:         db,
-		errHandler: errHandler,
-	}
-}
-
-func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Pin       string              `json:"pin"`
 		Password  string              `json:"password"`
@@ -55,7 +42,7 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
-		h.errHandler.BadRequest(w, r, err)
+		h.ErrHandler.BadRequest(w, r, err)
 		return
 	}
 
@@ -67,25 +54,25 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 
 	passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
 	input.Validator.Check(passwordMatches, "Incorrect password")
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
-	err = h.db.ChangeAccountPin(user.ID, input.Pin)
+	err = h.DB.ChangeAccountPin(user.ID, input.Pin)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	go func() {
-		_, err = h.db.CreateActivityLog(&database.ActivityLog{
+	h.Helper.BackgroundTask(r, func() error {
+		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
 			UserID:      user.ID,
 			Entity:      database.ActivityLogUserEntity,
 			EntityId:    user.ID,
@@ -94,23 +81,26 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 
 		if err != nil {
 			log.Printf("Error logging pin change action: %v", err)
+			return err
 		}
-	}()
+
+		return nil
+	})
 
 	message := "Pin set successfully"
 	err = response.JSONOkResponse(w, nil, message, nil)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 
 }
-func (h *userHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) {
 
 	user := context.ContextGetAuthenticatedUser((r))
 
 	if user == nil {
 		message := errors.New("unable to retrieve account details")
-		h.errHandler.BadRequest(w, r, message)
+		h.ErrHandler.BadRequest(w, r, message)
 		return
 	}
 
@@ -133,11 +123,11 @@ func (h *userHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) 
 	message := "Profile fetched successfully"
 	err := response.JSONOkResponse(w, data, message, nil)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 }
 
-func (h *userHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		ImageUrl  string              `json:"image_url"`
 		Validator validator.Validator `json:"-"`
@@ -147,7 +137,7 @@ func (h *userHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
-		h.errHandler.BadRequest(w, r, err)
+		h.ErrHandler.BadRequest(w, r, err)
 		return
 	}
 
@@ -155,13 +145,13 @@ func (h *userHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.
 	input.Validator.Check(validator.IsURL(input.ImageUrl), "Image link must be a valid url")
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
-	err = h.db.ChangeProfilePicture(user.ID, input.ImageUrl)
+	err = h.DB.ChangeProfilePicture(user.ID, input.ImageUrl)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -171,6 +161,6 @@ func (h *userHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.
 	}
 	err = response.JSONOkResponse(w, data, message, nil)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 }

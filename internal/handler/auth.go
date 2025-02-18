@@ -5,9 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/database"
-	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
 	"github.com/cradoe/morenee/internal/validator"
@@ -16,25 +14,11 @@ import (
 	"github.com/pascaldekloe/jwt"
 )
 
-type authHandler struct {
-	db         *database.DB
-	config     *config.Config
-	errHandler *errHandler.ErrorRepository
-}
-
-func NewAuthHandler(db *database.DB, config *config.Config, errHandler *errHandler.ErrorRepository) *authHandler {
-	return &authHandler{
-		db:         db,
-		errHandler: errHandler,
-		config:     config,
-	}
-}
-
 // New user registration typically involves:
 // Input validations and checking that records has not already existed for the unique fields, such as enail
 // We then start a database transaction to insert the user record and also create a wallet for the user
 // Failed operatin at any point will make the function to rollback their actions
-func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email       string              `json:"email"`
 		Password    string              `json:"password"`
@@ -47,7 +31,7 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
-		h.errHandler.BadRequest(w, r, err)
+		h.ErrHandler.BadRequest(w, r, err)
 		return
 	}
 
@@ -58,13 +42,13 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	if errs != nil {
 		// return any errors found before we check the other fields
 		// It's important that users have a strong password
-		h.errHandler.FailedValidation(w, r, errs)
+		h.ErrHandler.FailedValidation(w, r, errs)
 		return
 	}
 
-	_, found, err := h.db.GetUserByEmail(input.Email)
+	_, found, err := h.DB.GetUserByEmail(input.Email)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -86,30 +70,30 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	input.Validator.Check(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "Phone number must be in international format")
 
 	// we want to make sure no two users have the same phone number
-	found, err = h.db.CheckIfPhoneNumberExist(input.PhoneNumber)
+	found, err = h.DB.CheckIfPhoneNumberExist(input.PhoneNumber)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 	input.Validator.Check(!found, "Phone number has been registered")
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
 	hashedPassword, err := gopass.Hash(input.Password)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
 	// we are using transactions to make sure that if any of the operations fail
 	// we can rollback the changes and return an error to the client
 	// ...without having incomplete data in the operations
-	tx, err := h.db.BeginTx(r.Context(), nil)
+	tx, err := h.DB.BeginTx(r.Context(), nil)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -121,7 +105,7 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		}
 	}()
 
-	newUser := &database.User{
+	createdUser := &database.User{
 		FirstName:      input.FirstName,
 		LastName:       input.LastName,
 		Email:          input.Email,
@@ -130,28 +114,26 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 		HashedPassword: hashedPassword,
 	}
 
-	userID, err := h.db.InsertUser(newUser, tx)
+	userID, err := h.DB.InsertUser(createdUser, tx)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	// call the NewWalletHandler constructor and
-	// then generate  a wallet for the created user
-	walletHandler := NewWalletHandler(h.db, nil)
-	_, err = walletHandler.generateWallet(userID, newUser.PhoneNumber, tx)
+	// generate  a wallet for the created user
+	wallet, err := h.generateWallet(userID, createdUser.PhoneNumber, tx)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	go func() {
-		_, err = h.db.CreateActivityLog(&database.ActivityLog{
+	h.Helper.BackgroundTask(r, func() error {
+		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
 			UserID:      userID,
 			Entity:      database.ActivityLogUserEntity,
 			EntityId:    userID,
@@ -160,24 +142,37 @@ func (h *authHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 
 		if err != nil {
 			log.Printf("Error logging user registration action: %v", err)
+			return err
 		}
-	}()
 
-	// NB:: other operations that we could do include:
-	// sending account activation email
-	// but we are just going to skip that and focus on the core implementation that
-	// ... we are trying to achieve, which is to mock wallet-to-wallet transactions
+		return nil
+	})
+
+	h.Helper.BackgroundTask(r, func() error {
+		emailData := map[string]any{
+			"Name":          createdUser.FirstName + " " + createdUser.LastName,
+			"AccountNumber": wallet.AccountNumber,
+			"BankName":      BankName,
+		}
+		err = h.Mailer.Send(createdUser.Email, emailData, "example.tmpl")
+		if err != nil {
+			log.Printf("Error logging user registration action: %v", err)
+			return err
+		}
+
+		return nil
+	})
 
 	message := "Account created successfully"
 
 	err = response.JSONCreatedResponse(w, nil, message)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 
 }
 
-func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email     string              `json:"email"`
 		Password  string              `json:"password"`
@@ -186,13 +181,13 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
-		h.errHandler.BadRequest(w, r, err)
+		h.ErrHandler.BadRequest(w, r, err)
 		return
 	}
 
-	user, found, err := h.db.GetUserByEmail(input.Email)
+	user, found, err := h.DB.GetUserByEmail(input.Email)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -203,7 +198,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if found {
 		passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
 		if err != nil {
-			h.errHandler.ServerError(w, r, err)
+			h.ErrHandler.ServerError(w, r, err)
 			return
 		}
 
@@ -211,8 +206,8 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		input.Validator.Check(passwordMatches, "Incorrect email/password")
 
 		if !passwordMatches {
-			go func() {
-				_, err = h.db.CreateActivityLog(&database.ActivityLog{
+			h.Helper.BackgroundTask(r, func() error {
+				_, err = h.DB.CreateActivityLog(&database.ActivityLog{
 					UserID:      user.ID,
 					Entity:      database.ActivityLogUserEntity,
 					EntityId:    user.ID,
@@ -221,17 +216,29 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 				if err != nil {
 					log.Printf("Error logging failed login action: %v", err)
+					return err
 				}
-			}()
+
+				return nil
+			})
 
 			//  if password is not correct, log, that, and lock the account after 3 consecutive failed attempts
-			count := h.db.CountConsecutiveFailedLoginAttempts(user.ID, UserActivityLogFailedLoginDescription)
+			count := h.DB.CountConsecutiveFailedLoginAttempts(user.ID, UserActivityLogFailedLoginDescription)
 			// check if we already have 2 failed login attempts before this one.
 			if count >= 2 {
-				go h.db.UserLockAccount(user.ID)
+				h.Helper.BackgroundTask(r, func() error {
+					err = h.DB.UserLockAccount(user.ID)
 
-				go func() {
-					_, err = h.db.CreateActivityLog(&database.ActivityLog{
+					if err != nil {
+						log.Printf("Error Locking account due to failed login action: %v", err)
+						return err
+					}
+
+					return nil
+				})
+
+				h.Helper.BackgroundTask(r, func() error {
+					_, err = h.DB.CreateActivityLog(&database.ActivityLog{
 						UserID:      user.ID,
 						Entity:      database.ActivityLogUserEntity,
 						EntityId:    user.ID,
@@ -240,10 +247,13 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 					if err != nil {
 						log.Printf("Error logging failed login action: %v", err)
+						return err
 					}
-				}()
 
-				h.errHandler.FailedValidation(w, r, []string{"Account has been locked. Please contact support"})
+					return nil
+				})
+
+				h.ErrHandler.FailedValidation(w, r, []string{"Account has been locked. Please contact support"})
 				return
 			}
 		}
@@ -251,7 +261,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
@@ -263,13 +273,13 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
 
 		if err != nil {
-			h.errHandler.ServerError(w, r, err)
+			h.ErrHandler.ServerError(w, r, err)
 		}
 		return
 	}
 
-	go func() {
-		_, err = h.db.CreateActivityLog(&database.ActivityLog{
+	h.Helper.BackgroundTask(r, func() error {
+		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
 			UserID:      user.ID,
 			Entity:      database.ActivityLogUserEntity,
 			EntityId:    user.ID,
@@ -278,8 +288,11 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			log.Printf("Error logging successful login action: %v", err)
+			return err
 		}
-	}()
+
+		return nil
+	})
 
 	var claims jwt.Claims
 	claims.Subject = user.ID
@@ -289,12 +302,12 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	claims.NotBefore = jwt.NewNumericTime(time.Now())
 	claims.Expires = jwt.NewNumericTime(expiry)
 
-	claims.Issuer = h.config.BaseURL
-	claims.Audiences = []string{h.config.BaseURL}
+	claims.Issuer = h.Config.BaseURL
+	claims.Audiences = []string{h.Config.BaseURL}
 
-	jwtBytes, err := claims.HMACSign(jwt.HS256, []byte(h.config.Jwt.SecretKey))
+	jwtBytes, err := claims.HMACSign(jwt.HS256, []byte(h.Config.Jwt.SecretKey))
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -305,7 +318,7 @@ func (h *authHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	message := "Login succesful"
 	err = response.JSONOkResponse(w, data, message, nil)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 
 }

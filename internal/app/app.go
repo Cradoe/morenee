@@ -23,7 +23,7 @@ type Application struct {
 	DB           *database.DB
 	Logger       *slog.Logger
 	Mailer       *smtp.Mailer
-	WG           sync.WaitGroup
+	WG           *sync.WaitGroup
 	errorHandler *errHandler.ErrorRepository
 	helper       *helper.HelperRepository
 	Kafka        *stream.KafkaStream
@@ -75,7 +75,9 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	cfg.KafkaServers = env.GetString("KAFKA_SERVERS", "localhost:9092")
 
-	helper := helper.New(&cfg.BaseURL)
+	appWaitGroup := &sync.WaitGroup{}
+
+	helper := helper.New(&cfg.BaseURL, appWaitGroup) // needs waitgroup
 
 	errorHandler := errHandler.New(cfg.Notifications.Email, mailer, logger, helper)
 
@@ -92,6 +94,7 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 		helper:       helper,
 		Kafka:        kafkaStream,
 		FileUploader: fileUploader,
+		WG:           appWaitGroup,
 	}
 
 	return app, nil

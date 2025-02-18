@@ -56,7 +56,12 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 		}
 	} else {
 		err := db.GetContext(ctx, &id, query,
-			wallet.UserID)
+			wallet.UserID,
+			wallet.AccountNumber,
+			Level1SingleTransferLimit,
+			Level1DailyTransferLimit,
+			Level1WalletMaximumBalance,
+		)
 
 		if err != nil {
 			return "", err

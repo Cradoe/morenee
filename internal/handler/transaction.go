@@ -8,15 +8,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/database"
-	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
-	"github.com/cradoe/morenee/internal/stream"
 	"github.com/cradoe/morenee/internal/validator"
 )
 
@@ -63,22 +60,6 @@ const (
 	transferDebitTopic = "transfer.debit"
 )
 
-type transactionHandler struct {
-	db         *database.DB
-	wg         *sync.WaitGroup
-	errHandler *errHandler.ErrorRepository
-	kafka      *stream.KafkaStream
-}
-
-func NewTransactionHandler(db *database.DB, wg *sync.WaitGroup, errHandler *errHandler.ErrorRepository, kafka *stream.KafkaStream) *transactionHandler {
-	return &transactionHandler{
-		db:         db,
-		wg:         wg,
-		errHandler: errHandler,
-		kafka:      kafka,
-	}
-}
-
 type InitiatedTransfer struct {
 	ID                string  `json:"id"`
 	ReferenceNumber   string  `json:"reference_number"`
@@ -91,7 +72,7 @@ type InitiatedTransfer struct {
 	CreatedAt         string  `json:"created_at"`
 }
 
-func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Request) {
+func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Request) {
 	// To initiate a wallet to wallet transfer, we need to
 	// Step 1: Verify account PIN
 	// Step 2: Validate other input items and check for idempotency issue
@@ -113,7 +94,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 
 	err := request.DecodeJSON(w, r, &input)
 	if err != nil {
-		h.errHandler.BadRequest(w, r, err)
+		h.ErrHandler.BadRequest(w, r, err)
 		return
 	}
 
@@ -125,7 +106,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	input.Validator.Check(input.Pin > 0, "Pin is required")
 	// we are intentionally returning early becauase we don't want to proceed futher if Pin is not given
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
@@ -134,14 +115,14 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	if !sender.Pin.Valid {
 		// user has not set account pin
 		input.Validator.AddError(ErrNoAccountPin.Error())
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 	// check if pin is correct and return early if it's not
 	if int(sender.Pin.Int32) != input.Pin {
 		// user has not set account pin
 		input.Validator.AddError(ErrInvalidPin.Error())
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
@@ -153,13 +134,13 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	input.Validator.Check(validator.NotBlank(input.AccountNumber), "Recipient account number is required")
 
 	if input.Validator.HasErrors() {
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
-	_, found, err := h.db.FindTransactionByReference(input.ReferenceNumber)
+	_, found, err := h.DB.FindTransactionByReference(input.ReferenceNumber)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 	// we intentionally don't want check this when we checked for the above
@@ -167,7 +148,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// they have different nature.
 	if found {
 		input.Validator.AddError(ErrDuplicateTransfer.Error())
-		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
 		return
 	}
 
@@ -185,7 +166,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	errCh := make(chan error, 2)
 
 	go func() {
-		recipientWallet, found, err := h.db.FindWalletByAccountNumber(input.AccountNumber)
+		recipientWallet, found, err := h.DB.FindWalletByAccountNumber(input.AccountNumber)
 
 		if !found {
 			errCh <- fmt.Errorf("recipient_not_found")
@@ -203,7 +184,7 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	}()
 
 	go func() {
-		senderWallet, found, err := h.db.GetWallet(input.SenderWalletID)
+		senderWallet, found, err := h.DB.GetWallet(input.SenderWalletID)
 		if !found {
 			errCh <- fmt.Errorf("wallet_not_found")
 			return
@@ -231,14 +212,14 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 			response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
 			return
 		}
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	case recipientWallet = <-recipientCh:
 	}
 
 	select {
 	case err := <-errCh:
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	case senderWallet = <-senderCh:
 	}
@@ -286,8 +267,8 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	}
 
 	// Check for daily limit
-	if exceeded, err := h.db.HasExceededDailyLimit(senderWallet.ID, input.Amount, senderWallet.DailyTransferLimit); err != nil {
-		h.errHandler.ServerError(w, r, err)
+	if exceeded, err := h.DB.HasExceededDailyLimit(senderWallet.ID, input.Amount, senderWallet.DailyTransferLimit); err != nil {
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	} else if exceeded {
 		response.JSONErrorResponse(w, nil, ErrDailyLimitExceeded.Error(), http.StatusUnprocessableEntity, nil)
@@ -307,9 +288,9 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		ReferenceNumber:   input.ReferenceNumber,
 		Description:       sql.NullString{String: input.Description, Valid: input.Description != ""},
 	}
-	transaction, err := h.db.CreateTransaction(newTrans, nil)
+	transaction, err := h.DB.CreateTransaction(newTrans, nil)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
@@ -329,24 +310,23 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 
 	jsonMessage, err := json.Marshal(transferRes)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
 	// Produce message so that the debit worker can debit the sender
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		err := h.kafka.ProduceMessage(transferDebitTopic, string(jsonMessage))
+	h.Helper.BackgroundTask(r, func() error {
+		err := h.Kafka.ProduceMessage(transferDebitTopic, string(jsonMessage))
 		if err != nil {
 			log.Printf("Error producing message: %v", err)
+			return err
 		}
-	}()
 
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		_, err = h.db.CreateActivityLog(&database.ActivityLog{
+		return nil
+	})
+
+	h.Helper.BackgroundTask(r, func() error {
+		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
 			UserID:      sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transaction.ID,
@@ -355,11 +335,14 @@ func (h *transactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 
 		if err != nil {
 			log.Printf("Error logging transfer initiation action: %v", err)
+			return err
 		}
-	}()
+
+		return nil
+	})
 
 	err = response.JSONOkResponse(w, transferRes, message, nil)
 	if err != nil {
-		h.errHandler.ServerError(w, r, err)
+		h.ErrHandler.ServerError(w, r, err)
 	}
 }
