@@ -72,6 +72,20 @@ func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Reques
 	}
 
 	h.Helper.BackgroundTask(r, func() error {
+		emailData := h.Helper.NewEmailData()
+		emailData["Name"] = user.FirstName + " " + user.LastName
+		emailData["BankName"] = BankName
+
+		err = h.Mailer.Send(user.Email, emailData, "pin-changed.tmpl")
+		if err != nil {
+			log.Printf("sending pin changed action: %v", err)
+			return err
+		}
+
+		return nil
+	})
+
+	h.Helper.BackgroundTask(r, func() error {
 		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
 			UserID:      user.ID,
 			Entity:      database.ActivityLogUserEntity,

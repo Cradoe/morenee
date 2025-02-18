@@ -1,0 +1,65 @@
+{{define "subject"}}Credit Alert: You Received Money into Your {{.BankName}} Account{{end}}
+
+{{define "plainBody"}}
+Hi {{.Name}},
+
+We want to let you know that a credit was made to your {{.BankName}} account.
+
+Transaction Details:
+- Amount: {{.Amount}}
+- Sender: {{.SenderName}}
+- Sender Account Number: {{.SenderAccountNumber}}
+- Transaction ID: {{.TransactionID}}
+- Date & Time: {{now}}
+
+Your new balance is: {{.NewBalance}}
+
+If you did not expect this credit, please contact customer support immediately.
+
+Sent at: {{now}}
+
+Best regards,
+The {{.BankName}} Team
+{{end}}
+
+{{define "htmlBody"}}
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style>
+      body { font-family: Arial, sans-serif; }
+      .email-header { font-size: 20px; font-weight: bold; }
+      .email-body { font-size: 16px; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <p class="email-header">Hi {{.Name}},</p>
+    <p class="email-body">
+      We want to let you know that a credit was made to your <strong>{{.BankName}}</strong> account.
+    </p>
+    <p class="email-body">
+      <strong>Transaction Details:</strong><br/>
+      Amount: <strong>{{.Amount}}</strong><br/>
+      Sender: <strong>{{.SenderName}}</strong><br/>
+      Sender Account Number: <strong>{{.SenderAccountNumber}}</strong><br/>
+      Transaction ID: <strong>{{.TransactionID}}</strong><br/>
+      Date & Time: <strong>{{now}}</strong>
+    </p>
+    <p class="email-body">
+      Your new balance is: <strong>{{.NewBalance}}</strong>
+    </p>
+    <p class="email-body">
+      If you did not expect this credit, please contact customer support immediately.
+    </p>
+    <p class="email-body">
+      Sent at: {{now}}
+    </p>
+    <p class="email-body">
+      Best regards,<br/>
+      The {{.BankName}} Team
+    </p>
+  </body>
+</html>
+{{end}}

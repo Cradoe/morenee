@@ -62,6 +62,7 @@ func run(logger *slog.Logger) error {
 		DB:          application.DB,
 		Ctx:         ctx,
 		Helper:      application.Helper,
+		Mailer:      application.Mailer,
 	})
 
 	// In order to simplify things and reduce latency for user during transfer

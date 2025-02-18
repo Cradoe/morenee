@@ -43,6 +43,7 @@ func (wk *Worker) SuccessTransferWorker() {
 				if success {
 					// Send notifications to the sender and receiver
 					log.Printf("Transfer completed successfully: %v", transferReq)
+					wk.sendTransactionAlerts(&transferReq)
 				}
 			case kafka.Error:
 				log.Printf("Error: %v\n", e)
@@ -62,16 +63,89 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 		return false
 	}
 
-	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
-		UserID:      transferReq.SenderID,
-		Entity:      database.ActivityLogTransactionEntity,
-		EntityId:    transferReq.ID,
-		Description: handler.TransactionActivityLogSuccessDescription,
+	wk.Helper.BackgroundTask(nil, func() error {
+		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
+			UserID:      transferReq.SenderID,
+			Entity:      database.ActivityLogTransactionEntity,
+			EntityId:    transferReq.ID,
+			Description: handler.TransactionActivityLogSuccessDescription,
+		})
+
+		if err != nil {
+			log.Printf("Error logging successful transacton action: %v", err)
+			return err
+		}
+		return nil
 	})
 
+	return true
+}
+
+func (wk *Worker) sendTransactionAlerts(transferReq *handler.InitiatedTransfer) bool {
+
+	sender, _, err := wk.DB.GetUser(transferReq.SenderID)
 	if err != nil {
-		log.Printf("Error logging debit action: %v", err)
+		log.Printf("Error finding sender's account for debit alert: %v", err)
+		return false
 	}
+
+	recipient, _, err := wk.DB.GetUser(transferReq.RecipientID)
+	if err != nil {
+		log.Printf("Error finding recipient's account for debit alert: %v", err)
+		return false
+	}
+
+	senderWallet, _, err := wk.DB.GetWallet(transferReq.SenderWalletID)
+	if err != nil {
+		log.Printf("Error finding sender's wallet for debit alert: %v", err)
+		return false
+	}
+
+	recipientWallet, _, err := wk.DB.GetWallet(transferReq.RecipientWalletID)
+	if err != nil {
+		log.Printf("Error finding sender's wallet for debit alert: %v", err)
+		return false
+	}
+
+	// debit alert to sender
+	wk.Helper.BackgroundTask(nil, func() error {
+		emailData := wk.Helper.NewEmailData()
+		emailData["Name"] = sender.FirstName + " " + sender.LastName
+		emailData["BankName"] = handler.BankName
+		emailData["Amount"] = transferReq.Amount
+		emailData["RecipientName"] = recipient.FirstName + " " + recipient.LastName
+		emailData["RecipientAccountNumber"] = recipientWallet.AccountNumber
+		emailData["TransactionID"] = transferReq.ReferenceNumber
+		emailData["NewBalance"] = senderWallet.Balance
+
+		err = wk.Mailer.Send(sender.Email, emailData, "debit-alert.tmpl")
+		if err != nil {
+			log.Printf("Error sending debit email alert: %v", err)
+			return err
+		}
+
+		return nil
+	})
+
+	// credit alert to recipient
+	wk.Helper.BackgroundTask(nil, func() error {
+		emailData := wk.Helper.NewEmailData()
+		emailData["Name"] = recipient.FirstName + " " + recipient.LastName
+		emailData["BankName"] = handler.BankName
+		emailData["Amount"] = transferReq.Amount
+		emailData["SenderName"] = sender.FirstName + " " + sender.LastName
+		emailData["SenderAccountNumber"] = senderWallet.AccountNumber
+		emailData["TransactionID"] = transferReq.ReferenceNumber
+		emailData["NewBalance"] = recipientWallet.Balance
+
+		err = wk.Mailer.Send(recipient.Email, emailData, "credit-alert.tmpl")
+		if err != nil {
+			log.Printf("Error sending credit email alert: %v", err)
+			return err
+		}
+
+		return nil
+	})
 
 	return true
 }

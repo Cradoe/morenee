@@ -5,6 +5,7 @@ import (
 
 	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/smtp"
 	"github.com/cradoe/morenee/internal/stream"
 )
 
@@ -13,6 +14,7 @@ type Worker struct {
 	DB          *database.DB
 	Ctx         context.Context
 	Helper      *helper.HelperRepository
+	Mailer      *smtp.Mailer
 }
 
 const (
@@ -47,5 +49,6 @@ func New(wk *Worker) *Worker {
 		DB:          wk.DB,
 		Ctx:         wk.Ctx,
 		Helper:      wk.Helper,
+		Mailer:      wk.Mailer,
 	}
 }

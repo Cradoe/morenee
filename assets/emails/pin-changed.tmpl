@@ -1,0 +1,45 @@
+{{define "subject"}}Your Account PIN Has Been Changed{{end}}
+
+{{define "plainBody"}}
+Hi {{.Name}},
+
+We wanted to inform you that the PIN for your account with {{.BankName}} has been successfully changed.
+
+If you did not initiate this request, please contact our support team immediately.
+
+Sent at: {{now}}
+
+Best regards,
+The {{.BankName}} Team
+{{end}}
+
+{{define "htmlBody"}}
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style>
+      body { font-family: Arial, sans-serif; }
+      .email-header { font-size: 20px; font-weight: bold; }
+      .email-body { font-size: 16px; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <p class="email-header">Hi {{.Name}},</p>
+    <p class="email-body">
+      We wanted to inform you that the PIN for your account with <strong>{{.BankName}}</strong> has been successfully changed.
+    </p>
+    <p class="email-body">
+      If you did not initiate this request, please contact our support team immediately.
+    </p>
+    <p class="email-body">
+      Sent at: {{now}}
+    </p>
+    <p class="email-body">
+      Best regards,<br/>
+      The {{.BankName}} Team
+    </p>
+  </body>
+</html>
+{{end}}

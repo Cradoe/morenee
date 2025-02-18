@@ -149,15 +149,14 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-
 		emailData := h.Helper.NewEmailData()
 		emailData["Name"] = createdUser.FirstName + " " + createdUser.LastName
 		emailData["AccountNumber"] = wallet.AccountNumber
 		emailData["BankName"] = BankName
 
-		err = h.Mailer.Send(createdUser.Email, emailData, "example.tmpl")
+		err = h.Mailer.Send(createdUser.Email, emailData, "welcome-email.tmpl")
 		if err != nil {
-			log.Printf("Error logging user registration action: %v", err)
+			log.Printf("Error send welcome email: %v", err)
 			return err
 		}
 
@@ -196,6 +195,7 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
 	input.Validator.Check(found, "Incorrect email/password")
 
+	// validate password is user is found
 	if found {
 		passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
 		if err != nil {
@@ -289,6 +289,20 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			log.Printf("Error logging successful login action: %v", err)
+			return err
+		}
+
+		return nil
+	})
+
+	h.Helper.BackgroundTask(r, func() error {
+		emailData := h.Helper.NewEmailData()
+		emailData["Name"] = user.FirstName + " " + user.LastName
+		emailData["BankName"] = BankName
+
+		err = h.Mailer.Send(user.Email, emailData, "login-alert.tmpl")
+		if err != nil {
+			log.Printf("Error sending login alert: %v", err)
 			return err
 		}
 

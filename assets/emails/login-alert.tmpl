@@ -1,0 +1,52 @@
+{{define "subject"}}New Login to Your {{.BankName}} Account{{end}}
+
+{{define "plainBody"}}
+Hi {{.Name}},
+
+We noticed a login to your {{.BankName}} account. If this was you, no action is required.
+
+If you did not initiate this login, please reset your password immediately and contact customer support.
+
+Login Details:
+- Time: {{now}}
+
+Sent at: {{now}}
+
+Best regards,
+The {{.BankName}} Team
+{{end}}
+
+{{define "htmlBody"}}
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style>
+      body { font-family: Arial, sans-serif; }
+      .email-header { font-size: 20px; font-weight: bold; }
+      .email-body { font-size: 16px; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <p class="email-header">Hi {{.Name}},</p>
+    <p class="email-body">
+      We noticed a login to your <strong>{{.BankName}}</strong> account. If this was you, no action is required.
+    </p>
+    <p class="email-body">
+      If you did not initiate this login, please reset your password immediately and contact customer support.
+    </p>
+    <p class="email-body">
+      <strong>Login Details:</strong><br/>
+      Time: <strong>{{now}}</strong>
+    </p>
+    <p class="email-body">
+      Sent at: {{now}}
+    </p>
+    <p class="email-body">
+      Best regards,<br/>
+      The {{.BankName}} Team
+    </p>
+  </body>
+</html>
+{{end}}
