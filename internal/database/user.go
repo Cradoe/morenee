@@ -8,18 +8,19 @@ import (
 )
 
 type User struct {
-	ID             string        `db:"id"`
-	FirstName      string        `db:"first_name"`
-	LastName       string        `db:"last_name"`
-	PhoneNumber    string        `db:"phone_number"`
-	Gender         string        `db:"gender"`
-	Email          string        `db:"email"`
-	Status         string        `db:"status"`
-	Pin            sql.NullInt32 `db:"pin"`
-	CreatedAt      time.Time     `db:"created_at"`
-	DeletedAt      sql.NullTime  `db:"deleted_at"`
-	VerifiedAt     sql.NullTime  `db:"verified_at"`
-	HashedPassword string        `db:"hashed_password"`
+	ID             string         `db:"id"`
+	FirstName      string         `db:"first_name"`
+	LastName       string         `db:"last_name"`
+	PhoneNumber    string         `db:"phone_number"`
+	Image          sql.NullString `db:"image"`
+	Gender         string         `db:"gender"`
+	Email          string         `db:"email"`
+	Status         string         `db:"status"`
+	Pin            sql.NullInt32  `db:"pin"`
+	CreatedAt      time.Time      `db:"created_at"`
+	DeletedAt      sql.NullTime   `db:"deleted_at"`
+	VerifiedAt     sql.NullTime   `db:"verified_at"`
+	HashedPassword string         `db:"hashed_password"`
 }
 
 const (
@@ -129,13 +130,23 @@ func (db *DB) UpdateUserHashedPassword(id string, hashedPassword string) error {
 	return err
 }
 
-func (db *DB) SetAccountPin(id string, pin string) error {
+func (db *DB) ChangeAccountPin(id string, pin string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `UPDATE users SET pin = $1 WHERE id = $2`
 
 	_, err := db.ExecContext(ctx, query, pin, id)
+	return err
+}
+
+func (db *DB) ChangeProfilePicture(id string, image string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	query := `UPDATE users SET image = $1 WHERE id = $2`
+
+	_, err := db.ExecContext(ctx, query, image, id)
 	return err
 }
 

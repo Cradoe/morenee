@@ -78,7 +78,7 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = h.db.SetAccountPin(user.ID, input.Pin)
+	err = h.db.ChangeAccountPin(user.ID, input.Pin)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 		return
@@ -119,10 +119,11 @@ func (h *userHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) 
 		"first_name":   user.FirstName,
 		"last_name":    user.LastName,
 		"email":        user.Email,
+		"image":        user.Image.String,
 		"phone_number": user.PhoneNumber,
 		"gender":       user.Gender,
 		"created_at":   user.CreatedAt,
-		"verified_at":  nil,
+		"verified_at":  user.VerifiedAt.Time,
 	}
 
 	if user.VerifiedAt.Valid {
@@ -131,6 +132,44 @@ func (h *userHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) 
 
 	message := "Profile fetched successfully"
 	err := response.JSONOkResponse(w, data, message, nil)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+	}
+}
+
+func (h *userHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ImageUrl  string              `json:"image_url"`
+		Validator validator.Validator `json:"-"`
+	}
+
+	user := context.ContextGetAuthenticatedUser((r))
+
+	err := request.DecodeJSON(w, r, &input)
+	if err != nil {
+		h.errHandler.BadRequest(w, r, err)
+		return
+	}
+
+	input.Validator.Check(validator.NotBlank(input.ImageUrl), "File is required")
+	input.Validator.Check(validator.IsURL(input.ImageUrl), "Image link must be a valid url")
+
+	if input.Validator.HasErrors() {
+		h.errHandler.FailedValidation(w, r, input.Validator.Errors)
+		return
+	}
+
+	err = h.db.ChangeProfilePicture(user.ID, input.ImageUrl)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+		return
+	}
+
+	message := "Picture changed successfully"
+	data := map[string]any{
+		"image": input.ImageUrl,
+	}
+	err = response.JSONOkResponse(w, data, message, nil)
 	if err != nil {
 		h.errHandler.ServerError(w, r, err)
 	}
