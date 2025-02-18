@@ -42,6 +42,10 @@ func (app *Application) routes() http.Handler {
 	transcHandler := handler.NewTransactionHandler(app.DB, &app.WG, app.errorHandler, app.Kafka)
 	mux.Handle("POST /transactions/send-money", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(transcHandler.HandleTransferMoney)))
 
+	// utility routes
+	utilHandler := handler.NewUtilityHandler(app.errorHandler, app.FileUploader)
+	mux.HandleFunc("POST /utility/upload-file", utilHandler.HandleUploadFile)
+
 	// we need to handle all other routes that are not defined in the mux.
 	// This is when user tries to access a route that does not exist
 	//  We define a catch-all route

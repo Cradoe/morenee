@@ -9,6 +9,7 @@ import (
 	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/env"
 	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/file"
 	"github.com/cradoe/morenee/internal/helper"
 	"github.com/cradoe/morenee/internal/smtp"
 	"github.com/cradoe/morenee/internal/stream"
@@ -26,6 +27,7 @@ type Application struct {
 	errorHandler *errHandler.ErrorRepository
 	helper       *helper.HelperRepository
 	Kafka        *stream.KafkaStream
+	FileUploader *file.FileUploader
 }
 
 func NewApplication(logger *slog.Logger) (*Application, error) {
@@ -57,6 +59,10 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	cfg.KafkaServers = env.GetString("KAFKA_SERVERS", "localhost:9092")
 
+	cfg.FileUploader.ApiKey = env.GetString("CLOUDINARY_API_KEY", "")
+	cfg.FileUploader.CloudName = env.GetString("CLOUDINARY_CLOUD_NAME", "")
+	cfg.FileUploader.ApiSecret = env.GetString("CLOUDINARY_API_SECRET", "")
+
 	db, err := database.New(cfg.Db.Dsn, cfg.Db.Automigrate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
@@ -67,11 +73,15 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize mailer: %w", err)
 	}
 
+	cfg.KafkaServers = env.GetString("KAFKA_SERVERS", "localhost:9092")
+
 	helper := helper.New(&cfg.BaseURL)
 
 	errorHandler := errHandler.New(cfg.Notifications.Email, mailer, logger, helper)
 
 	kafkaStream := stream.New(cfg.KafkaServers)
+
+	fileUploader := file.New(cfg.FileUploader.CloudName, cfg.FileUploader.ApiKey, cfg.FileUploader.ApiSecret)
 
 	app := &Application{
 		Config:       cfg,
@@ -81,6 +91,7 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 		errorHandler: errorHandler,
 		helper:       helper,
 		Kafka:        kafkaStream,
+		FileUploader: fileUploader,
 	}
 
 	return app, nil

@@ -20,5 +20,10 @@ type Config struct {
 		Password string
 		From     string
 	}
+	FileUploader struct {
+		CloudName string
+		ApiKey    string
+		ApiSecret string
+	}
 	KafkaServers string
 }
