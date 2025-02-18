@@ -109,7 +109,7 @@ func (h *userHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) 
 	user := context.ContextGetAuthenticatedUser((r))
 
 	if user == nil {
-		message := errors.New("unable to retrieve account detaiils")
+		message := errors.New("unable to retrieve account details")
 		h.errHandler.BadRequest(w, r, message)
 		return
 	}
