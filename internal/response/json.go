@@ -41,6 +41,7 @@ func JSONOkResponse(w http.ResponseWriter, data any, message string, headers htt
 	}
 
 	convertedData, ok := data.(map[string]any)
+
 	if ok {
 		data = helper.ConvertKeysToSnakeCase(convertedData)
 	}

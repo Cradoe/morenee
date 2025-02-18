@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -102,4 +103,35 @@ func (h *userHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 		h.errHandler.ServerError(w, r, err)
 	}
 
+}
+func (h *userHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) {
+
+	user := context.ContextGetAuthenticatedUser((r))
+
+	if user == nil {
+		message := errors.New("unable to retrieve account detaiils")
+		h.errHandler.BadRequest(w, r, message)
+		return
+	}
+
+	data := map[string]any{
+		"id":           user.ID,
+		"first_name":   user.FirstName,
+		"last_name":    user.LastName,
+		"email":        user.Email,
+		"phone_number": user.PhoneNumber,
+		"gender":       user.Gender,
+		"created_at":   user.CreatedAt,
+		"verified_at":  nil,
+	}
+
+	if user.VerifiedAt.Valid {
+		data["verified_at"] = user.VerifiedAt.Time
+	}
+
+	message := "Profile fetched successfully"
+	err := response.JSONOkResponse(w, data, message, nil)
+	if err != nil {
+		h.errHandler.ServerError(w, r, err)
+	}
 }

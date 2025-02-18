@@ -30,6 +30,7 @@ func (app *Application) routes() http.Handler {
 	// Account routes
 	accountHandler := handler.NewUserHandler(app.DB, app.errorHandler)
 	mux.Handle("PATCH /account/pin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(accountHandler.HandleSetAccountPin)))
+	mux.Handle("GET /account/profile", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(accountHandler.HandleUserProfile)))
 
 	// Wallet routes
 	walletHandler := handler.NewWalletHandler(app.DB, app.errorHandler)

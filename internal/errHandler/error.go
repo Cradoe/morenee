@@ -110,6 +110,7 @@ func (e *ErrorRepository) MethodNotAllowed(w http.ResponseWriter, r *http.Reques
 }
 
 func (e *ErrorRepository) BadRequest(w http.ResponseWriter, r *http.Request, err error) {
+
 	e.ErrorMessage(&Error{
 		w:       w,
 		r:       r,
