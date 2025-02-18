@@ -4,13 +4,15 @@ import (
 	"context"
 
 	"github.com/cradoe/morenee/internal/database"
+	"github.com/cradoe/morenee/internal/helper"
 	"github.com/cradoe/morenee/internal/stream"
 )
 
 type Worker struct {
-	kafkaStream *stream.KafkaStream
-	db          *database.DB
-	ctx         context.Context
+	KafkaStream *stream.KafkaStream
+	DB          *database.DB
+	Ctx         context.Context
+	Helper      *helper.HelperRepository
 }
 
 const (
@@ -19,9 +21,6 @@ const (
 
 	// transferCreditGroupID is used for workers that needs to take action whenever a request for credit was initiated
 	transferCreditGroupID = "transfer-credit-group"
-
-	// transferFailed is used for workers that needs to take action whenever there's a failed transfer
-	transferFailed = "transfer-failed-group"
 
 	// transferSuccessGroupID is used for workers that needs to take action when a transfer recquest has been completed
 	transferSuccessGroupID = "transfer-success-group"
@@ -42,10 +41,11 @@ const (
 
 // Our workers typically needs access to database and kafka event stream
 // worker-specific dependency can be passed as argument to the worker
-func New(kafkaStream *stream.KafkaStream, db *database.DB, ctx context.Context) *Worker {
+func New(wk *Worker) *Worker {
 	return &Worker{
-		kafkaStream: kafkaStream,
-		db:          db,
-		ctx:         ctx,
+		KafkaStream: wk.KafkaStream,
+		DB:          wk.DB,
+		Ctx:         wk.Ctx,
+		Helper:      wk.Helper,
 	}
 }

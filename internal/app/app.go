@@ -25,7 +25,7 @@ type Application struct {
 	Mailer       *smtp.Mailer
 	WG           *sync.WaitGroup
 	errorHandler *errHandler.ErrorRepository
-	helper       *helper.HelperRepository
+	Helper       *helper.HelperRepository
 	Kafka        *stream.KafkaStream
 	FileUploader *file.FileUploader
 }
@@ -91,7 +91,7 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 		Logger:       logger,
 		Mailer:       mailer,
 		errorHandler: errorHandler,
-		helper:       helper,
+		Helper:       helper,
 		Kafka:        kafkaStream,
 		FileUploader: fileUploader,
 		WG:           appWaitGroup,

@@ -56,7 +56,13 @@ func run(logger *slog.Logger) error {
 	defer cancel()
 
 	// Start workers
-	wk := worker.New(application.Kafka, application.DB, ctx)
+
+	wk := worker.New(&worker.Worker{
+		KafkaStream: application.Kafka,
+		DB:          application.DB,
+		Ctx:         ctx,
+		Helper:      application.Helper,
+	})
 
 	// In order to simplify things and reduce latency for user during transfer
 	// we have set up workers to handle every bits of the process

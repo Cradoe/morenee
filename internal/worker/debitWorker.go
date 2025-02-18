@@ -21,7 +21,7 @@ import (
 )
 
 func (wk *Worker) DebitWorker() {
-	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
+	consumer, err := wk.KafkaStream.CreateConsumer(&stream.StreamConsumer{
 		GroupId: transferDebitGroupID,
 		Topic:   TransferDebitTopic,
 	})
@@ -36,7 +36,7 @@ func (wk *Worker) DebitWorker() {
 
 	for {
 		select {
-		case <-wk.ctx.Done():
+		case <-wk.Ctx.Done():
 			log.Println("DebitWorker received cancellation signal, shutting down...")
 			return
 		default:
@@ -58,7 +58,7 @@ func (wk *Worker) DebitWorker() {
 					for retryCount < maxRetries {
 						success := wk.debitAccount(&transferReq)
 						if success {
-							wk.kafkaStream.ProduceMessage(TransferCreditTopic, string(msg.Value))
+							wk.KafkaStream.ProduceMessage(TransferCreditTopic, string(msg.Value))
 							return
 						}
 
@@ -90,14 +90,14 @@ func (wk *Worker) DebitWorker() {
 }
 
 func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
-	_, err := wk.db.DebitWallet(transferReq.SenderWalletID, transferReq.Amount)
+	_, err := wk.DB.DebitWallet(transferReq.SenderWalletID, transferReq.Amount)
 	if err != nil {
 		return false
 	}
 
 	// log operation
-	go func() {
-		_, err = wk.db.CreateActivityLog(&database.ActivityLog{
+	wk.Helper.BackgroundTask(nil, func() error {
+		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
 			UserID:      transferReq.SenderID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
@@ -106,11 +106,10 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 
 		if err != nil {
 			log.Printf("Error logging debit action: %v", err)
-			// We should raise a critical error that notifies all concerned parties
-			// whenever we encountered failure in logging action.
-			// Logging is a key part of our system and should be treated as priority.
+			return err
 		}
-	}()
+		return nil
+	})
 
 	return true
 }
@@ -118,13 +117,13 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 func (wk *Worker) processFailedDebit(transferReq *handler.InitiatedTransfer) bool {
 	// When debit fails, we would mark the transaction status as failed
 
-	_, err := wk.db.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusFailed)
+	_, err := wk.DB.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusFailed)
 	if err != nil {
 		log.Printf("Error marking transaction as failed: %v", err)
 		return false
 	}
 	// create an activity log to this effect
-	_, err = wk.db.CreateActivityLog(&database.ActivityLog{
+	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
 		UserID:      transferReq.SenderID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,

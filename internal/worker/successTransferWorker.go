@@ -15,7 +15,7 @@ import (
 )
 
 func (wk *Worker) SuccessTransferWorker() {
-	consumer, err := wk.kafkaStream.CreateConsumer(&stream.StreamConsumer{
+	consumer, err := wk.KafkaStream.CreateConsumer(&stream.StreamConsumer{
 		GroupId: transferSuccessGroupID,
 		Topic:   TransferSuccessTopic,
 	})
@@ -27,7 +27,7 @@ func (wk *Worker) SuccessTransferWorker() {
 
 	for {
 		select {
-		case <-wk.ctx.Done():
+		case <-wk.Ctx.Done():
 			log.Println("SuccessTransferWorker received cancellation signal, shutting down...")
 			return
 		default:
@@ -56,13 +56,13 @@ func (wk *Worker) SuccessTransferWorker() {
 }
 
 func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransfer) bool {
-	_, err := wk.db.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusCompleted)
+	_, err := wk.DB.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusCompleted)
 	if err != nil {
 		log.Printf("Error updating transaction status: %v", err)
 		return false
 	}
 
-	_, err = wk.db.CreateActivityLog(&database.ActivityLog{
+	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
 		UserID:      transferReq.SenderID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,

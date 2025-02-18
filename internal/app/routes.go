@@ -23,7 +23,7 @@ func (app *Application) routes() http.Handler {
 		ErrHandler:   app.errorHandler,
 		Config:       &app.Config,
 		Mailer:       app.Mailer,
-		Helper:       app.helper,
+		Helper:       app.Helper,
 		Kafka:        app.Kafka,
 		FileUploader: app.FileUploader,
 	})
