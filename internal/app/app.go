@@ -77,9 +77,9 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	appWaitGroup := &sync.WaitGroup{}
 
-	helper := helper.New(&cfg.BaseURL, appWaitGroup) // needs waitgroup
+	errorHandler := errHandler.New(cfg.Notifications.Email, mailer, logger)
 
-	errorHandler := errHandler.New(cfg.Notifications.Email, mailer, logger, helper)
+	helper := helper.New(&cfg.BaseURL, appWaitGroup, errorHandler)
 
 	kafkaStream := stream.New(cfg.KafkaServers)
 

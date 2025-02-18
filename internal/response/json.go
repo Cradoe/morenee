@@ -3,8 +3,8 @@ package response
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/cradoe/morenee/internal/helper"
+	"regexp"
+	"strings"
 )
 
 type Response[T any] struct {
@@ -22,7 +22,7 @@ func JSONCreatedResponse(w http.ResponseWriter, data any, message string) error 
 
 	convertedData, ok := data.(map[string]any)
 	if ok {
-		data = helper.ConvertKeysToSnakeCase(convertedData)
+		data = ConvertKeysToSnakeCase(convertedData)
 	}
 
 	response := &Response[any]{
@@ -43,7 +43,7 @@ func JSONOkResponse(w http.ResponseWriter, data any, message string, headers htt
 	convertedData, ok := data.(map[string]any)
 
 	if ok {
-		data = helper.ConvertKeysToSnakeCase(convertedData)
+		data = ConvertKeysToSnakeCase(convertedData)
 	}
 
 	response := &Response[any]{
@@ -96,4 +96,26 @@ func JSONWithHeaders[T any](w http.ResponseWriter, response *Response[T], header
 	w.Write(js)
 
 	return nil
+}
+
+func toSnakeCase(s string) string {
+	re := regexp.MustCompile("([a-z0-9])([A-Z])")
+	snake := re.ReplaceAllString(s, "${1}_${2}")
+	return strings.ToLower(snake)
+}
+
+func ConvertKeysToSnakeCase(data map[string]interface{}) map[string]interface{} {
+	snakeData := make(map[string]interface{})
+
+	for key, value := range data {
+		snakeKey := toSnakeCase(key)
+
+		// Recursively handle nested maps
+		if nestedMap, ok := value.(map[string]interface{}); ok {
+			value = ConvertKeysToSnakeCase(nestedMap)
+		}
+
+		snakeData[snakeKey] = value
+	}
+	return snakeData
 }

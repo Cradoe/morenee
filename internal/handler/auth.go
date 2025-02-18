@@ -149,11 +149,12 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		emailData := map[string]any{
-			"Name":          createdUser.FirstName + " " + createdUser.LastName,
-			"AccountNumber": wallet.AccountNumber,
-			"BankName":      BankName,
-		}
+
+		emailData := h.Helper.NewEmailData()
+		emailData["Name"] = createdUser.FirstName + " " + createdUser.LastName
+		emailData["AccountNumber"] = wallet.AccountNumber
+		emailData["BankName"] = BankName
+
 		err = h.Mailer.Send(createdUser.Email, emailData, "example.tmpl")
 		if err != nil {
 			log.Printf("Error logging user registration action: %v", err)

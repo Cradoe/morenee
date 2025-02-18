@@ -8,7 +8,6 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/cradoe/morenee/internal/helper"
 	"github.com/cradoe/morenee/internal/response"
 	"github.com/cradoe/morenee/internal/smtp"
 )
@@ -16,15 +15,13 @@ import (
 type ErrorRepository struct {
 	notificationEmail string
 	logger            *slog.Logger
-	help              *helper.HelperRepository
 	mailer            *smtp.Mailer
 }
 
-func New(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger, help *helper.HelperRepository) *ErrorRepository {
+func New(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger) *ErrorRepository {
 	return &ErrorRepository{
 		notificationEmail: notificationEmail,
 		logger:            logger,
-		help:              help,
 		mailer:            mailer,
 	}
 }
@@ -32,21 +29,32 @@ func New(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger, hel
 func (e *ErrorRepository) ReportServerError(r *http.Request, err error) {
 	var (
 		message = err.Error()
-		method  = r.Method
-		url     = r.URL.String()
+		method  string
+		url     string
 		trace   = string(debug.Stack())
 	)
 
+	// Check if r is nil before accessing its fields
+	if r != nil {
+		method = r.Method
+		url = r.URL.String()
+	} else {
+		method = "Unknown"
+		url = "Unknown"
+	}
+
+	// Log the error with request info
 	requestAttrs := slog.Group("request", "method", method, "url", url)
 	e.logger.Error(message, requestAttrs, "trace", trace)
 
+	// Send notification email if required
 	if e.notificationEmail != "" {
-		data := e.help.NewEmailData()
-		data["Message"] = message
-		data["RequestMethod"] = method
-		data["RequestURL"] = url
-		data["Trace"] = trace
-
+		data := map[string]any{
+			"Message":       message,
+			"RequestMethod": method,
+			"RequestURL":    url,
+			"Trace":         trace,
+		}
 		err := e.mailer.Send(e.notificationEmail, data, "error-notification.tmpl")
 		if err != nil {
 			trace = string(debug.Stack())

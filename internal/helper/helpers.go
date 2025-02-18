@@ -1,21 +1,24 @@
 package helper
 
 import (
+	"fmt"
 	"net/http"
-	"regexp"
-	"strings"
 	"sync"
+
+	"github.com/cradoe/morenee/internal/errHandler"
 )
 
 type HelperRepository struct {
-	baseUrl *string
-	WG      *sync.WaitGroup
+	baseUrl    *string
+	WG         *sync.WaitGroup
+	errHandler *errHandler.ErrorRepository
 }
 
-func New(baseUrl *string, wg *sync.WaitGroup) *HelperRepository {
+func New(baseUrl *string, wg *sync.WaitGroup, errHandler *errHandler.ErrorRepository) *HelperRepository {
 	return &HelperRepository{
-		baseUrl: baseUrl,
-		WG:      wg,
+		baseUrl:    baseUrl,
+		WG:         wg,
+		errHandler: errHandler,
 	}
 }
 
@@ -36,35 +39,13 @@ func (h *HelperRepository) BackgroundTask(r *http.Request, fn func() error) {
 		defer func() {
 			err := recover()
 			if err != nil {
-				// h.errorHandler.ReportServerError(r, fmt.Errorf("%s", err))
+				h.errHandler.ReportServerError(nil, fmt.Errorf("%s", err))
 			}
 		}()
 
 		err := fn()
 		if err != nil {
-			// h.errorHandler.ReportServerError(r, err)
+			h.errHandler.ReportServerError(nil, err)
 		}
 	}()
-}
-
-func toSnakeCase(s string) string {
-	re := regexp.MustCompile("([a-z0-9])([A-Z])")
-	snake := re.ReplaceAllString(s, "${1}_${2}")
-	return strings.ToLower(snake)
-}
-
-func ConvertKeysToSnakeCase(data map[string]interface{}) map[string]interface{} {
-	snakeData := make(map[string]interface{})
-
-	for key, value := range data {
-		snakeKey := toSnakeCase(key)
-
-		// Recursively handle nested maps
-		if nestedMap, ok := value.(map[string]interface{}); ok {
-			value = ConvertKeysToSnakeCase(nestedMap)
-		}
-
-		snakeData[snakeKey] = value
-	}
-	return snakeData
 }
