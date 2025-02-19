@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS next_of_kins

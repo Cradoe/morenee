@@ -178,3 +178,109 @@ func (h *RouteHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http
 		h.ErrHandler.ServerError(w, r, err)
 	}
 }
+
+func (h *RouteHandler) HandleGetNextOfKin(w http.ResponseWriter, r *http.Request) {
+
+	user := context.ContextGetAuthenticatedUser((r))
+
+	nextOfKin, found, err := h.DB.GetNextOfKinByUserID(user.ID)
+
+	if !found {
+		h.ErrHandler.NotFound(w, r)
+		return
+	}
+
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	data := map[string]any{
+		"id":           nextOfKin.ID,
+		"first_name":   nextOfKin.FirstName,
+		"last_name":    nextOfKin.LastName,
+		"email":        nextOfKin.Email,
+		"address":      nextOfKin.Address,
+		"relationship": nextOfKin.Relationship,
+		"phone_number": nextOfKin.PhoneNumber,
+	}
+
+	message := "Next of kin details fetched successfully."
+	err = response.JSONOkResponse(w, data, message, nil)
+
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+	}
+}
+
+func (h *RouteHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email        string              `json:"email"`
+		FirstName    string              `json:"first_name"`
+		LastName     string              `json:"last_name"`
+		PhoneNumber  string              `json:"phone_number"`
+		Address      string              `json:"address"`
+		Relationship string              `json:"relationship"`
+		Validator    validator.Validator `json:"-"`
+	}
+
+	err := request.DecodeJSON(w, r, &input)
+	if err != nil {
+		h.ErrHandler.BadRequest(w, r, err)
+		return
+	}
+
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
+
+	input.Validator.Check(validator.NotBlank(input.FirstName), "First name is required")
+	input.Validator.Check(validator.NotBlank(input.LastName), "Last name is required")
+	input.Validator.Check(validator.NotBlank(input.PhoneNumber), "Phone numner is required")
+	input.Validator.Check(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "Phone number must be in international format")
+	input.Validator.Check(validator.NotBlank(input.Address), "Address is required")
+	input.Validator.Check(validator.NotBlank(input.Relationship), "Relationship is required")
+
+	if input.Validator.HasErrors() {
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
+		return
+	}
+
+	user := context.ContextGetAuthenticatedUser((r))
+
+	// check if user has previously added Next of kin
+	existingRecord, found, _ := h.DB.GetNextOfKinByUserID(user.ID)
+
+	// if yes, then update the existing one
+	if found {
+		_, err = h.DB.UpdateNextOfKin(existingRecord.ID, &database.NextOfKin{
+			FirstName:    input.FirstName,
+			LastName:     input.LastName,
+			Email:        input.Email,
+			Address:      input.Address,
+			PhoneNumber:  input.PhoneNumber,
+			Relationship: input.Relationship,
+		})
+
+	} else {
+		// create a new record
+		_, err = h.DB.CreateNextOfKin(&database.NextOfKin{
+			FirstName:    input.FirstName,
+			LastName:     input.LastName,
+			Email:        input.Email,
+			Address:      input.Address,
+			PhoneNumber:  input.PhoneNumber,
+			Relationship: input.Relationship,
+			UserID:       user.ID,
+		})
+	}
+
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+	message := "Next of kin details saved successfully."
+	err = response.JSONCreatedResponse(w, nil, message)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+	}
+}

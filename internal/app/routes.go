@@ -39,6 +39,8 @@ func (app *Application) routes() http.Handler {
 	mux.Handle("PATCH /account/pin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleSetAccountPin)))
 	mux.Handle("GET /account/profile", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleUserProfile)))
 	mux.Handle("PATCH /account/profile-picture", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleChangeProfilePicture)))
+	mux.Handle("GET /account/next-of-kin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleGetNextOfKin)))
+	mux.Handle("POST /account/next-of-kin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleAddNextOfKin)))
 
 	// Wallet routes
 	mux.Handle("GET /wallets", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleUserWallets)))
