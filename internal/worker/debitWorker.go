@@ -51,12 +51,12 @@ func (wk *Worker) DebitWorker() {
 				// attend to other requests while retries are handled in the background.
 				go func(msg *kafka.Message) {
 					message := msg.Value
-					var transferReq handler.InitiatedTransfer
-					json.Unmarshal(message, &transferReq)
+					var transferReq *handler.TransactionResponseData
+					json.Unmarshal(message, transferReq)
 
 					retryCount := 0
 					for retryCount < maxRetries {
-						success := wk.debitAccount(&transferReq)
+						success := wk.debitAccount(transferReq)
 						if success {
 							wk.KafkaStream.ProduceMessage(TransferCreditTopic, string(msg.Value))
 							return
@@ -75,7 +75,7 @@ func (wk *Worker) DebitWorker() {
 					// Final failure handling
 					log.Printf("Failed to debit account after %d retries. Message: %s\n", maxRetries, message)
 
-					wk.processFailedDebit(&transferReq)
+					wk.processFailedDebit(transferReq)
 				}(e)
 
 			case kafka.Error:
@@ -89,8 +89,8 @@ func (wk *Worker) DebitWorker() {
 	}
 }
 
-func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
-	_, err := wk.DB.DebitWallet(transferReq.SenderWalletID, transferReq.Amount)
+func (wk *Worker) debitAccount(transferReq *handler.TransactionResponseData) bool {
+	_, err := wk.DB.DebitWallet(transferReq.Sender.Wallet.ID, transferReq.Amount)
 	if err != nil {
 		return false
 	}
@@ -98,7 +98,7 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 	// log operation
 	wk.Helper.BackgroundTask(nil, func() error {
 		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
-			UserID:      transferReq.SenderID,
+			UserID:      transferReq.Sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
 			Description: handler.TransactionActivityLogDebitDescription,
@@ -114,7 +114,7 @@ func (wk *Worker) debitAccount(transferReq *handler.InitiatedTransfer) bool {
 	return true
 }
 
-func (wk *Worker) processFailedDebit(transferReq *handler.InitiatedTransfer) bool {
+func (wk *Worker) processFailedDebit(transferReq *handler.TransactionResponseData) bool {
 	// When debit fails, we would mark the transaction status as failed
 
 	_, err := wk.DB.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusFailed)
@@ -124,7 +124,7 @@ func (wk *Worker) processFailedDebit(transferReq *handler.InitiatedTransfer) boo
 	}
 	// create an activity log to this effect
 	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
-		UserID:      transferReq.SenderID,
+		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
 		Description: handler.TransactionActivityLogFailedDebitDescription,

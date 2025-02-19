@@ -36,14 +36,14 @@ func (wk *Worker) SuccessTransferWorker() {
 			switch e := event.(type) {
 			case *kafka.Message:
 				message := e.Value
-				var transferReq handler.InitiatedTransfer
+				var transferReq *handler.TransactionResponseData
 				json.Unmarshal(message, &transferReq)
 
-				success := wk.completeTransferOperation(&transferReq)
+				success := wk.completeTransferOperation(transferReq)
 				if success {
 					// Send notifications to the sender and receiver
 					log.Printf("Transfer completed successfully: %v", transferReq)
-					wk.sendTransactionAlerts(&transferReq)
+					wk.sendTransactionAlerts(transferReq)
 				}
 			case kafka.Error:
 				log.Printf("Error: %v\n", e)
@@ -56,7 +56,7 @@ func (wk *Worker) SuccessTransferWorker() {
 	}
 }
 
-func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransfer) bool {
+func (wk *Worker) completeTransferOperation(transferReq *handler.TransactionResponseData) bool {
 	_, err := wk.DB.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusCompleted)
 	if err != nil {
 		log.Printf("Error updating transaction status: %v", err)
@@ -65,7 +65,7 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 
 	wk.Helper.BackgroundTask(nil, func() error {
 		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
-			UserID:      transferReq.SenderID,
+			UserID:      transferReq.Sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
 			Description: handler.TransactionActivityLogSuccessDescription,
@@ -81,27 +81,27 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.InitiatedTransf
 	return true
 }
 
-func (wk *Worker) sendTransactionAlerts(transferReq *handler.InitiatedTransfer) bool {
+func (wk *Worker) sendTransactionAlerts(transferReq *handler.TransactionResponseData) bool {
 
-	sender, _, err := wk.DB.GetUser(transferReq.SenderID)
+	sender, _, err := wk.DB.GetUser(transferReq.Sender.ID)
 	if err != nil {
 		log.Printf("Error finding sender's account for debit alert: %v", err)
 		return false
 	}
 
-	recipient, _, err := wk.DB.GetUser(transferReq.RecipientID)
+	recipient, _, err := wk.DB.GetUser(transferReq.Recipient.ID)
 	if err != nil {
 		log.Printf("Error finding recipient's account for debit alert: %v", err)
 		return false
 	}
 
-	senderWallet, _, err := wk.DB.GetWallet(transferReq.SenderWalletID)
+	senderWallet, _, err := wk.DB.GetWallet(transferReq.Sender.Wallet.ID)
 	if err != nil {
 		log.Printf("Error finding sender's wallet for debit alert: %v", err)
 		return false
 	}
 
-	recipientWallet, _, err := wk.DB.GetWallet(transferReq.RecipientWalletID)
+	recipientWallet, _, err := wk.DB.GetWallet(transferReq.Recipient.Wallet.ID)
 	if err != nil {
 		log.Printf("Error finding sender's wallet for debit alert: %v", err)
 		return false
@@ -111,7 +111,7 @@ func (wk *Worker) sendTransactionAlerts(transferReq *handler.InitiatedTransfer) 
 	wk.Helper.BackgroundTask(nil, func() error {
 		emailData := wk.Helper.NewEmailData()
 		emailData["Name"] = sender.FirstName + " " + sender.LastName
-		emailData["BankName"] = handler.BankName
+		emailData["BankName"] = transferReq.Sender.Wallet.BankName
 		emailData["Amount"] = transferReq.Amount
 		emailData["RecipientName"] = recipient.FirstName + " " + recipient.LastName
 		emailData["RecipientAccountNumber"] = recipientWallet.AccountNumber
@@ -131,7 +131,7 @@ func (wk *Worker) sendTransactionAlerts(transferReq *handler.InitiatedTransfer) 
 	wk.Helper.BackgroundTask(nil, func() error {
 		emailData := wk.Helper.NewEmailData()
 		emailData["Name"] = recipient.FirstName + " " + recipient.LastName
-		emailData["BankName"] = handler.BankName
+		emailData["BankName"] = transferReq.Recipient.Wallet.BankName
 		emailData["Amount"] = transferReq.Amount
 		emailData["SenderName"] = sender.FirstName + " " + sender.LastName
 		emailData["SenderAccountNumber"] = senderWallet.AccountNumber

@@ -8,6 +8,18 @@ import (
 	"time"
 )
 
+// type Transaction struct {
+// 	ID                string         `db:"id"`
+// 	SenderWalletID    string         `db:"sender_wallet_id"`
+// 	RecipientWalletID string         `db:"recipient_wallet_id"`
+// 	ReferenceNumber   string         `db:"reference_number"`
+// 	Amount            float64        `db:"amount"`
+// 	Description       sql.NullString `db:"description"`
+// 	Status            string         `db:"status"`
+// 	CreatedAt         time.Time      `db:"created_at"`
+// 	UpdatedAt         sql.NullTime   `db:"updated_at"`
+// }
+
 type Transaction struct {
 	ID                string         `db:"id"`
 	SenderWalletID    string         `db:"sender_wallet_id"`
@@ -18,7 +30,64 @@ type Transaction struct {
 	Status            string         `db:"status"`
 	CreatedAt         time.Time      `db:"created_at"`
 	UpdatedAt         sql.NullTime   `db:"updated_at"`
+
+	Sender    User `db:"sender"`
+	Recipient User `db:"recipient"`
 }
+type TransactionDetails struct {
+	ID              string       `db:"id"`
+	ReferenceNumber string       `db:"reference_number"`
+	Amount          float64      `db:"amount"`
+	Status          string       `db:"status"`
+	Description     string       `db:"description"`
+	CreatedAt       sql.NullTime `db:"created_at"`
+
+	// Sender details
+	SenderID        string `db:"sender_id"`
+	SenderFirstName string `db:"sender_first_name"`
+	SenderLastName  string `db:"sender_last_name"`
+	SenderWalletID  string `db:"sender_wallet_id"`
+	SenderAccount   string `db:"sender_account_number"`
+
+	// Recipient details
+	RecipientID        string `db:"recipient_id"`
+	RecipientFirstName string `db:"recipient_first_name"`
+	RecipientLastName  string `db:"recipient_last_name"`
+	RecipientWalletID  string `db:"recipient_wallet_id"`
+	RecipientAccount   string `db:"recipient_account_number"`
+}
+
+const getTransactionBasicQuery = `SELECT 
+			t.id, 
+			t.reference_number, 
+			t.status, 
+			t.amount, 
+			t.description, 
+			t.created_at,
+
+			-- Sender details
+			su.id AS sender_id,
+			su.first_name AS sender_first_name,
+			su.last_name AS sender_last_name,
+			s.id AS sender_wallet_id,
+			s.account_number AS sender_account_number,
+
+			-- Recipient details
+			ru.id AS recipient_id,
+			ru.first_name AS recipient_first_name,
+			ru.last_name AS recipient_last_name,
+			r.id AS recipient_wallet_id,
+			r.account_number AS recipient_account_number
+
+		FROM transactions t
+		LEFT JOIN wallets s ON t.sender_wallet_id = s.id
+		LEFT JOIN users su ON s.user_id = su.id  
+
+		LEFT JOIN wallets r ON t.recipient_wallet_id = r.id
+		LEFT JOIN users ru ON r.user_id = ru.id  
+
+		
+		`
 
 const (
 	// TransactionStatusPending indicates that the transaction has been initiated but not yet completed.
@@ -37,16 +106,16 @@ const (
 	TransactionStatusReversed = "reversed"
 )
 
-func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (*Transaction, error) {
+func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var trans Transaction
+	var id string
 
 	query := `
 		INSERT INTO transactions (sender_wallet_id, recipient_wallet_id, amount, reference_number, description)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, status, reference_number, amount, sender_wallet_id, recipient_wallet_id, created_at`
+		RETURNING id`
 	if tx != nil {
 		err := tx.QueryRowContext(ctx, query,
 			transaction.SenderWalletID,
@@ -54,12 +123,12 @@ func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (*Transact
 			transaction.Amount,
 			transaction.ReferenceNumber,
 			transaction.Description,
-		).Scan(&trans)
+		).Scan(&id)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	} else {
-		err := db.GetContext(ctx, &trans, query,
+		err := db.GetContext(ctx, &id, query,
 			transaction.SenderWalletID,
 			transaction.RecipientWalletID,
 			transaction.Amount,
@@ -68,11 +137,11 @@ func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (*Transact
 		)
 
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	}
 
-	return &trans, nil
+	return id, nil
 }
 
 func (db *DB) UpdateTransactionStatus(transaction_id string, status string) (bool, error) {
@@ -119,6 +188,50 @@ func (db *DB) FindTransactionByReference(reference_number string) (*Transaction,
 	}
 
 	return &trans, true, nil
+}
+
+func (db *DB) GetTransaction(id string) (*TransactionDetails, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	var transaction TransactionDetails
+
+	query := getTransactionBasicQuery + `
+
+		WHERE t.id = $1
+	`
+
+	err := db.GetContext(ctx, &transaction, query, id)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	return &transaction, true, nil
+}
+
+func (db *DB) GetTransactionsByWalletId(wallet_id string) ([]*TransactionDetails, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	var transactions []*TransactionDetails
+
+	query := getTransactionBasicQuery + `WHERE t.sender_wallet_id=$1 OR t.recipient_wallet_id=$2`
+
+	err := db.SelectContext(ctx, &transactions, query, wallet_id, wallet_id)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	return transactions, len(transactions) > 0, nil
 }
 
 // HasExceededDailyLimit checks whether a user has exceeded their daily debit limit based on their transaction history.

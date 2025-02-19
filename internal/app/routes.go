@@ -46,9 +46,11 @@ func (app *Application) routes() http.Handler {
 	mux.Handle("GET /wallets", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleUserWallets)))
 	mux.Handle("GET /wallets/{id}/details", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleWalletDetails)))
 	mux.Handle("GET /wallets/{id}/balance", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleWalletBalance)))
+	mux.Handle("GET /wallets/{id}/transactions", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleWalletTransactions)))
 
 	// Transaction routes
 	mux.Handle("POST /transactions/send-money", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleTransferMoney)))
+	mux.Handle("GET /transactions/{id}", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleTransactionDetails)))
 
 	// utility routes
 	mux.HandleFunc("POST /utility/upload-file", routeHandler.HandleUploadFile)

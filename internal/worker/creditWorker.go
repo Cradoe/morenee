@@ -53,12 +53,12 @@ func (wk *Worker) CreditWorker() {
 				// attend to other requests while retries are handled in the background.
 				go func(msg *kafka.Message) {
 					message := msg.Value
-					var transferReq handler.InitiatedTransfer
-					json.Unmarshal(message, &transferReq)
+					var transferReq *handler.TransactionResponseData
+					json.Unmarshal(message, transferReq)
 
 					retryCount := 0
 					for retryCount < maxRetries {
-						success := wk.creditAccount(&transferReq)
+						success := wk.creditAccount(transferReq)
 						if success {
 							// Produce message so the success worker can mark the transaction as successful
 							wk.KafkaStream.ProduceMessage(TransferSuccessTopic, string(e.Value))
@@ -78,7 +78,7 @@ func (wk *Worker) CreditWorker() {
 					// Final failure handling
 					log.Printf("Failed to credit account after %d retries. Message: %s\n", maxRetries, message)
 
-					wk.processFailedCredit(&transferReq)
+					wk.processFailedCredit(transferReq)
 				}(e)
 			case kafka.Error:
 				log.Printf("Error: %v\n", e)
@@ -91,8 +91,8 @@ func (wk *Worker) CreditWorker() {
 	}
 }
 
-func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
-	_, err := wk.DB.CreditWallet(transferReq.RecipientWalletID, transferReq.Amount)
+func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bool {
+	_, err := wk.DB.CreditWallet(transferReq.Recipient.Wallet.ID, transferReq.Amount)
 	if err != nil {
 		log.Printf("Error crediting wallet: %v", err)
 		return false
@@ -101,7 +101,7 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 	// log operation
 	wk.Helper.BackgroundTask(nil, func() error {
 		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
-			UserID:      transferReq.RecipientID,
+			UserID:      transferReq.Recipient.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
 			Description: handler.TransactionActivityLogCreditDescription,
@@ -117,7 +117,7 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 
 	// check and lock account if balance has exceeded balance limit
 	wk.Helper.BackgroundTask(nil, func() error {
-		wallet, found, err := wk.DB.GetWallet(transferReq.RecipientWalletID)
+		wallet, found, err := wk.DB.GetWallet(transferReq.Recipient.Wallet.ID)
 
 		if !found {
 			return errors.New("could not check account limit")
@@ -129,7 +129,7 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 		}
 
 		if wallet.Balance > wallet.MaxBalance {
-			err = wk.DB.LockWallet(transferReq.RecipientWalletID)
+			err = wk.DB.LockWallet(transferReq.Recipient.Wallet.ID)
 			if err != nil {
 				log.Printf("Error holding recipient account over max balance limit: %v", err)
 				return err
@@ -151,10 +151,10 @@ func (wk *Worker) creditAccount(transferReq *handler.InitiatedTransfer) bool {
 // 4. Marks the original transaction as "Reversed" to indicate its failure and refund status.
 // 5. Creates a new transaction record for the reversal to ensure proper audit trails.
 // 6. Logs the new reversal transaction to document the entire process.
-func (wk *Worker) processFailedCredit(transferReq *handler.InitiatedTransfer) bool {
+func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseData) bool {
 	// Log the failed credit attempt synchronously
 	_, err := wk.DB.CreateActivityLog(&database.ActivityLog{
-		UserID:      transferReq.SenderID,
+		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
 		Description: handler.TransactionActivityLogFailedCreditDescription,
@@ -164,7 +164,7 @@ func (wk *Worker) processFailedCredit(transferReq *handler.InitiatedTransfer) bo
 	}
 
 	// Reverse the money to the sender
-	_, err = wk.DB.CreditWallet(transferReq.SenderWalletID, transferReq.Amount)
+	_, err = wk.DB.CreditWallet(transferReq.Sender.Wallet.ID, transferReq.Amount)
 	if err != nil {
 		log.Printf("Error reversing money from failed credit: %v", err)
 		return false
@@ -172,7 +172,7 @@ func (wk *Worker) processFailedCredit(transferReq *handler.InitiatedTransfer) bo
 
 	// Log the successful credit reversal
 	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
-		UserID:      transferReq.SenderID,
+		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
 		Description: handler.TransactionActivityLogCreditDescription,
@@ -191,13 +191,13 @@ func (wk *Worker) processFailedCredit(transferReq *handler.InitiatedTransfer) bo
 	// Create a new transaction for the reversal
 	desc := fmt.Sprintf("Reversal of %f", transferReq.Amount)
 	newTrans := &database.Transaction{
-		SenderWalletID:    transferReq.SenderWalletID,
-		RecipientWalletID: transferReq.SenderWalletID, // sender is the recipient in a reversal
+		SenderWalletID:    transferReq.Sender.Wallet.ID,
+		RecipientWalletID: transferReq.Sender.Wallet.ID, // sender is the recipient in a reversal
 		Amount:            transferReq.Amount,
 		ReferenceNumber:   transferReq.ReferenceNumber,
 		Description:       sql.NullString{String: desc, Valid: true},
 	}
-	transaction, err := wk.DB.CreateTransaction(newTrans, nil)
+	transactionID, err := wk.DB.CreateTransaction(newTrans, nil)
 	if err != nil {
 		log.Printf("Error creating reversal transaction: %v", err)
 		return false
@@ -205,9 +205,9 @@ func (wk *Worker) processFailedCredit(transferReq *handler.InitiatedTransfer) bo
 
 	// Log the reversal transaction
 	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
-		UserID:      transferReq.SenderID,
+		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
-		EntityId:    transaction.ID,
+		EntityId:    transactionID,
 		Description: handler.TransactionActivityLogRevertedDescription,
 	})
 	if err != nil {

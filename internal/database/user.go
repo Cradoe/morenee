@@ -21,6 +21,8 @@ type User struct {
 	DeletedAt      sql.NullTime   `db:"deleted_at"`
 	VerifiedAt     sql.NullTime   `db:"verified_at"`
 	HashedPassword string         `db:"hashed_password"`
+
+	Wallet Wallet `db:"wallet"`
 }
 
 const (

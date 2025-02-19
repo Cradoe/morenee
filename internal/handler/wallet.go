@@ -11,6 +11,12 @@ import (
 
 const BankName = "Mornee"
 
+type WalletMiniData struct {
+	ID            string `json:"id"`
+	AccountNumber string `json:"account_number"`
+	BankName      string `json:"bank_name"`
+}
+
 func (h *RouteHandler) generateWallet(user_id string, phone_number string, tx *sql.Tx) (*database.Wallet, error) {
 
 	// we don't have to manually check if account_number already exists because

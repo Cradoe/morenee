@@ -70,24 +70,42 @@ func (st *KafkaStream) EnsureTopicsExist(topics []string) error {
 }
 
 func (st *KafkaStream) ProduceMessage(topic, message string) error {
-	producer, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": st.kafkaServers})
+	producer, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers":      st.kafkaServers,
+		"queue.buffering.max.ms": "100", // Reduce buffering delay (optional)
+	})
 	if err != nil {
 		return err
 	}
-	defer producer.Close()
+	defer func() {
+		producer.Flush(15000)
+		producer.Close()
+	}()
 
-	// Produce the message
+	// Delivery report channel
+	deliveryChan := make(chan kafka.Event, 1)
+
+	// Produce message
 	err = producer.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
 		Value:          []byte(message),
-	}, nil)
+	}, deliveryChan)
 
 	if err != nil {
 		log.Printf("Failed to produce message: %v", err)
 		return err
 	}
 
-	log.Printf("Message sent to topic %s", topic)
+	// Wait for delivery confirmation
+	e := <-deliveryChan
+	m := e.(*kafka.Message)
+	if m.TopicPartition.Error != nil {
+		log.Printf("Delivery failed: %v", m.TopicPartition.Error)
+	} else {
+		log.Printf("Message delivered to %v", m.TopicPartition)
+	}
+
+	close(deliveryChan)
 	return nil
 }
 

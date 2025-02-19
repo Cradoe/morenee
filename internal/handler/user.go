@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/cradoe/gopass"
 	"github.com/cradoe/morenee/internal/context"
@@ -30,6 +31,25 @@ const (
 	// This log entry can be triggered due to multiple failed login attempts, security concerns, or manual actions by administrators.
 	UserActivityLogLockedAccountDescription = "Locked account"
 )
+
+type UserResponseData struct {
+	ID          string     `json:"id"`
+	FirstName   string     `json:"first_name"`
+	LastName    string     `json:"last_name"`
+	Email       string     `json:"email"`
+	Image       string     `json:"image"`
+	PhoneNumber string     `json:"phone_number"`
+	Gender      string     `json:"gender"`
+	CreatedAt   time.Time  `json:"created_at"`
+	VerifiedAt  *time.Time `json:"verified_at"`
+}
+
+type MiniUserWithWallet struct {
+	ID        string         `json:"id"`
+	FirstName string         `json:"first_name"`
+	LastName  string         `json:"last_name"`
+	Wallet    WalletMiniData `json:"wallet"`
+}
 
 func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
@@ -118,24 +138,25 @@ func (h *RouteHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	data := map[string]any{
-		"id":           user.ID,
-		"first_name":   user.FirstName,
-		"last_name":    user.LastName,
-		"email":        user.Email,
-		"image":        user.Image.String,
-		"phone_number": user.PhoneNumber,
-		"gender":       user.Gender,
-		"created_at":   user.CreatedAt,
-		"verified_at":  user.VerifiedAt.Time,
+	var verifiedAt *time.Time
+	if user.VerifiedAt.Valid {
+		verifiedAt = &user.VerifiedAt.Time
 	}
 
-	if user.VerifiedAt.Valid {
-		data["verified_at"] = user.VerifiedAt.Time
+	userResponse := UserResponseData{
+		ID:          user.ID,
+		FirstName:   user.FirstName,
+		LastName:    user.LastName,
+		Email:       user.Email,
+		Image:       user.Image.String,
+		PhoneNumber: user.PhoneNumber,
+		Gender:      user.Gender,
+		CreatedAt:   user.CreatedAt,
+		VerifiedAt:  verifiedAt,
 	}
 
 	message := "Profile fetched successfully"
-	err := response.JSONOkResponse(w, data, message, nil)
+	err := response.JSONOkResponse(w, userResponse, message, nil)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 	}

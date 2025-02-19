@@ -60,16 +60,15 @@ const (
 	transferDebitTopic = "transfer.debit"
 )
 
-type InitiatedTransfer struct {
-	ID                string  `json:"id"`
-	ReferenceNumber   string  `json:"reference_number"`
-	SenderID          string  `json:"sender_id"`
-	SenderWalletID    string  `json:"sender_wallet_id"`
-	RecipientID       string  `json:"recipient_id"`
-	RecipientWalletID string  `json:"recipient_wallet_id"`
-	Status            string  `json:"status"`
-	Amount            float64 `json:"amount"`
-	CreatedAt         string  `json:"created_at"`
+type TransactionResponseData struct {
+	ID              string             `json:"id"`
+	ReferenceNumber string             `json:"reference_number"`
+	Amount          float64            `json:"amount"`
+	Description     string             `json:"description"`
+	Status          string             `json:"status"`
+	CreatedAt       time.Time          `json:"created_at"`
+	Sender          MiniUserWithWallet `json:"sender"`
+	Recipient       MiniUserWithWallet `json:"recipient"`
 }
 
 func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +287,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 		ReferenceNumber:   input.ReferenceNumber,
 		Description:       sql.NullString{String: input.Description, Valid: input.Description != ""},
 	}
-	transaction, err := h.DB.CreateTransaction(newTrans, nil)
+	transactionId, err := h.DB.CreateTransaction(newTrans, nil)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -296,17 +295,13 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 
 	message := "Transfer initiated successfully"
 
-	transferRes := &InitiatedTransfer{
-		ID:                transaction.ID,
-		ReferenceNumber:   transaction.ReferenceNumber,
-		SenderID:          sender.ID,
-		RecipientID:       recipientWallet.UserID,
-		SenderWalletID:    transaction.SenderWalletID,
-		RecipientWalletID: transaction.RecipientWalletID,
-		Status:            transaction.Status,
-		Amount:            transaction.Amount,
-		CreatedAt:         transaction.CreatedAt.Format(time.RFC3339),
+	transactionData, _, err := h.DB.GetTransaction(transactionId)
+	if !found {
+		h.ErrHandler.ServerError(w, r, err)
+		return
 	}
+
+	transferRes := h.formTransactionResponseData(transactionData)
 
 	jsonMessage, err := json.Marshal(transferRes)
 	if err != nil {
@@ -327,9 +322,9 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 
 	h.Helper.BackgroundTask(r, func() error {
 		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
-			UserID:      sender.ID,
+			UserID:      transferRes.Sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
-			EntityId:    transaction.ID,
+			EntityId:    transferRes.ID,
 			Description: TransactionActivityLogInitiatedDescription,
 		})
 
@@ -344,5 +339,88 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	err = response.JSONOkResponse(w, transferRes, message, nil)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
+	}
+}
+
+func (h *RouteHandler) HandleWalletTransactions(w http.ResponseWriter, r *http.Request) {
+	walletId := r.PathValue("id")
+
+	transactions, found, err := h.DB.GetTransactionsByWalletId(walletId)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	if !found {
+		h.ErrHandler.NotFound(w, r)
+		return
+	}
+
+	message := "Transactions fetched successfully"
+
+	data := make([]*TransactionResponseData, len(transactions))
+	for i, t := range transactions {
+		data[i] = h.formTransactionResponseData(t)
+	}
+
+	err = response.JSONOkResponse(w, data, message, nil)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+	}
+}
+
+func (h *RouteHandler) HandleTransactionDetails(w http.ResponseWriter, r *http.Request) {
+	transactionId := r.PathValue("id")
+
+	transaction, found, err := h.DB.GetTransaction(transactionId)
+	if !found {
+		h.ErrHandler.NotFound(w, r)
+		return
+	}
+
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	result := h.formTransactionResponseData(transaction)
+
+	message := "Details fetched successfully"
+
+	err = response.JSONOkResponse(w, result, message, nil)
+
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+	}
+}
+
+func (h *RouteHandler) formTransactionResponseData(transaction *database.TransactionDetails) *TransactionResponseData {
+	return &TransactionResponseData{
+		ID:              transaction.ID,
+		ReferenceNumber: transaction.ReferenceNumber,
+		Amount:          transaction.Amount,
+		Status:          transaction.Status,
+		Description:     transaction.Description,
+		CreatedAt:       transaction.CreatedAt.Time,
+		Sender: MiniUserWithWallet{
+			ID:        transaction.SenderID,
+			FirstName: transaction.SenderFirstName,
+			LastName:  transaction.SenderLastName,
+			Wallet: WalletMiniData{
+				ID:            transaction.SenderWalletID,
+				AccountNumber: transaction.SenderAccount,
+				BankName:      BankName,
+			},
+		},
+		Recipient: MiniUserWithWallet{
+			ID:        transaction.RecipientID,
+			FirstName: transaction.RecipientFirstName,
+			LastName:  transaction.RecipientLastName,
+			Wallet: WalletMiniData{
+				ID:            transaction.RecipientWalletID,
+				AccountNumber: transaction.RecipientAccount,
+				BankName:      BankName,
+			},
+		},
 	}
 }
