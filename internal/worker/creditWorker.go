@@ -117,21 +117,37 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 
 	// check and lock account if balance has exceeded balance limit
 	wk.Helper.BackgroundTask(nil, func() error {
+		// Step 1: Get the recipient wallet
 		wallet, found, err := wk.DB.GetWallet(transferReq.Recipient.Wallet.ID)
-
+		if err != nil {
+			log.Printf("Error getting wallet: %v", err)
+			return err
+		}
 		if !found {
 			return errors.New("could not check account limit")
 		}
 
+		// Step 2: Get the recipient's KYC level
+		recipient, found, err := wk.DB.GetUser(transferReq.Recipient.ID)
 		if err != nil {
-			log.Printf("Error getting account limit: %v", err)
+			log.Printf("Error getting recipient user: %v", err)
+			return err
+		}
+		if !found {
+			return errors.New("could not check account limit")
+		}
+
+		// Step 3: Determine recipient's KYC level
+		recipientKYCLevel, err := wk.getRecipientKYCLevelOrLockWallet(recipient)
+		if err != nil {
 			return err
 		}
 
-		if wallet.Balance > wallet.MaxBalance {
+		// Step 4: Check balance limit and lock wallet if exceeded
+		if wallet.Balance > recipientKYCLevel.WalletBalanceLimit {
 			err = wk.DB.LockWallet(transferReq.Recipient.Wallet.ID)
 			if err != nil {
-				log.Printf("Error holding recipient account over max balance limit: %v", err)
+				log.Printf("Error locking recipient account over max balance limit: %v", err)
 				return err
 			}
 		}
@@ -215,4 +231,29 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 	}
 
 	return true
+}
+
+// Helper function to get the recipient's KYC level
+func (wk *Worker) getRecipientKYCLevelOrLockWallet(recipient *database.User) (*database.KYCLevel, error) {
+	if !recipient.KYCLevelID.Valid {
+		return nil, errors.New("recipient KYC level is invalid")
+	}
+
+	kycLevelIDStr := fmt.Sprintf("%d", recipient.KYCLevelID.Int16)
+	level, kycLevelExists, err := wk.DB.GetKYC(kycLevelIDStr)
+	if err != nil {
+		log.Printf("Error getting KYC level: %v", err)
+		return nil, errors.New("could not check account limit")
+	}
+
+	if !kycLevelExists {
+		// Lock wallet if KYC level does not exist
+		err = wk.DB.LockWallet(recipient.Wallet.ID)
+		if err != nil {
+			log.Printf("Error locking recipient account due to missing KYC level: %v", err)
+		}
+		return nil, errors.New("recipient account locked due to missing KYC level")
+	}
+
+	return level, nil
 }

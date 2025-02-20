@@ -8,29 +8,20 @@ import (
 )
 
 type Wallet struct {
-	ID                  string       `db:"id"`
-	UserID              string       `db:"user_id"`
-	Balance             float64      `db:"balance"`
-	AccountNumber       string       `db:"account_number"`
-	Currency            string       `db:"currency"`
-	SingleTransferLimit float64      `db:"single_transfer_limit"`
-	DailyTransferLimit  float64      `db:"daily_transfer_limit"`
-	MaxBalance          float64      `db:"max_balance"`
-	Status              string       `db:"status"`
-	CreatedAt           time.Time    `db:"created_at"`
-	DeletedAt           sql.NullTime `db:"deleted_at"`
-	UpdatedAt           sql.NullTime `db:"updated_at"`
+	ID            string       `db:"id"`
+	UserID        string       `db:"user_id"`
+	Balance       float64      `db:"balance"`
+	AccountNumber string       `db:"account_number"`
+	Currency      string       `db:"currency"`
+	Status        string       `db:"status"`
+	CreatedAt     time.Time    `db:"created_at"`
+	DeletedAt     sql.NullTime `db:"deleted_at"`
+	UpdatedAt     sql.NullTime `db:"updated_at"`
 }
 
 const (
 	WalletActiveStatus = "active"
 	WalletOnHoldStatus = "on-hold"
-)
-
-const (
-	Level1SingleTransferLimit  float64 = 50_000
-	Level1DailyTransferLimit   float64 = 200_000
-	Level1WalletMaximumBalance float64 = 2_000_000
 )
 
 func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
@@ -40,16 +31,13 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 	var id string
 
 	query := `
-		INSERT INTO wallets (user_id, account_number, single_transfer_limit, daily_transfer_limit, max_balance)
+		INSERT INTO wallets (user_id, account_number)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id`
 	if tx != nil {
 		err := tx.QueryRowContext(ctx, query,
 			wallet.UserID,
 			wallet.AccountNumber,
-			Level1SingleTransferLimit,
-			Level1DailyTransferLimit,
-			Level1WalletMaximumBalance,
 		).Scan(&id)
 		if err != nil {
 			return "", err
@@ -58,9 +46,6 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 		err := db.GetContext(ctx, &id, query,
 			wallet.UserID,
 			wallet.AccountNumber,
-			Level1SingleTransferLimit,
-			Level1DailyTransferLimit,
-			Level1WalletMaximumBalance,
 		)
 
 		if err != nil {

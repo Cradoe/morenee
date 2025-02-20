@@ -26,6 +26,7 @@ var (
 	ErrInsufficientBalance         = errors.New("insufficient balance")
 	ErrDailyLimitExceeded          = errors.New("daily limit exceeded, upgrade your account")
 	ErrSingleTransferLimitExceeded = errors.New("transfer limit exceeded, upgrade your account")
+	ErrCompleteProfileSetup        = errors.New("setup your bvn and address")
 	ErrRecipientNotFound           = errors.New("recipient not found")
 	ErrNoAccountPin                = errors.New("you need to set PIN for your account")
 	ErrDuplicateTransfer           = errors.New("this appears to be a duplicate transaction")
@@ -261,14 +262,34 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// check sender kyc to be sure they are at least in kyc level 1
+	var kycLevelIDStr string
+	var senderKycLevel *database.KYCLevel
+	if sender.KYCLevelID.Valid {
+		kycLevelIDStr = fmt.Sprintf("%d", sender.KYCLevelID.Int16)
+
+		level, kycLevelExists, err := h.DB.GetKYC(kycLevelIDStr)
+		if err != nil {
+			h.ErrHandler.ServerError(w, r, err)
+		}
+		if !kycLevelExists {
+			response.JSONErrorResponse(w, nil, ErrCompleteProfileSetup.Error(), http.StatusUnprocessableEntity, nil)
+			return
+		}
+		senderKycLevel = level
+
+	}
+
+	// check sender kyc to be sure they can transfer this amount
+
 	// check for single transfer limit
-	if senderWallet.SingleTransferLimit < input.Amount {
+	if senderKycLevel.SingleTransferLimit < input.Amount {
 		response.JSONErrorResponse(w, nil, ErrSingleTransferLimitExceeded.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
 
 	// Check for daily limit
-	if exceeded, err := h.DB.HasExceededDailyLimit(senderWallet.ID, input.Amount, senderWallet.DailyTransferLimit); err != nil {
+	if exceeded, err := h.DB.HasExceededDailyLimit(senderWallet.ID, input.Amount, senderKycLevel.DailyTransferLimit); err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	} else if exceeded {
