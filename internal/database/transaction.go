@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -214,24 +215,100 @@ func (db *DB) GetTransaction(id string) (*TransactionDetails, bool, error) {
 	return &transaction, true, nil
 }
 
-func (db *DB) GetTransactionsByWalletId(wallet_id string) ([]*TransactionDetails, bool, error) {
+type FilterTransactionsOptions struct {
+	StartDate   *time.Time
+	EndDate     *time.Time
+	SearchQuery string
+	Offset      int
+	Limit       int
+}
+
+func (db *DB) GetTransactionsByWalletId(walletId string, option *FilterTransactionsOptions) ([]*TransactionDetails, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
+	// Base query to fetch transaction details
+	query := getTransactionBasicQuery
+	query += `WHERE (t.sender_wallet_id = $1 OR t.recipient_wallet_id = $2)`
+
+	args := []interface{}{walletId, walletId}
+	placeholderIdx := 3
+
+	// Filter by start date if provided
+	if option.StartDate != nil {
+		query += " AND t.created_at >= $" + strconv.Itoa(placeholderIdx)
+		args = append(args, option.StartDate)
+		placeholderIdx++
+	}
+
+	// Filter by end date if provided
+	if option.EndDate != nil {
+		query += " AND t.created_at <= $" + strconv.Itoa(placeholderIdx)
+		args = append(args, option.EndDate)
+		placeholderIdx++
+	}
+
+	// Apply search filter across multiple fields
+	if option.SearchQuery != "" {
+		query += " AND ("
+
+		// Search by reference number
+		query += "t.reference_number ILIKE $" + strconv.Itoa(placeholderIdx)
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+
+		// Search by transaction status
+		query += " OR t.status ILIKE $" + strconv.Itoa(placeholderIdx)
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+
+		// Search in sender details if sender_wallet_id is not the same as walletId
+		query += " OR (t.sender_wallet_id != $1 AND (su.first_name ILIKE $" + strconv.Itoa(placeholderIdx)
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+
+		query += " OR su.last_name ILIKE $" + strconv.Itoa(placeholderIdx)
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+
+		query += " OR s.account_number ILIKE $" + strconv.Itoa(placeholderIdx) + "))"
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+
+		// Search in recipient details if recipient_wallet_id is not the same as walletId
+		query += " OR (t.recipient_wallet_id != $2 AND (ru.first_name ILIKE $" + strconv.Itoa(placeholderIdx)
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+
+		query += " OR ru.last_name ILIKE $" + strconv.Itoa(placeholderIdx)
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+
+		query += " OR r.account_number ILIKE $" + strconv.Itoa(placeholderIdx) + ")))"
+		args = append(args, "%"+option.SearchQuery+"%")
+		placeholderIdx++
+	}
+
+	// Add sorting and limit for pagination
+	query += " ORDER BY t.created_at DESC LIMIT $" + strconv.Itoa(placeholderIdx)
+	args = append(args, option.Limit)
+	placeholderIdx++
+
+	// Add offset for pagination
+	query += " OFFSET $" + strconv.Itoa(placeholderIdx)
+	args = append(args, option.Offset)
+
 	var transactions []*TransactionDetails
-
-	query := getTransactionBasicQuery + `WHERE t.sender_wallet_id=$1 OR t.recipient_wallet_id=$2`
-
-	err := db.SelectContext(ctx, &transactions, query, wallet_id, wallet_id)
-
+	err := db.SelectContext(ctx, &transactions, query, args...)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, false, nil
-		}
 		return nil, false, err
 	}
 
-	return transactions, len(transactions) > 0, nil
+	if len(transactions) == 0 {
+		return nil, false, nil
+	}
+
+	return transactions, true, nil
 }
 
 // HasExceededDailyLimit checks whether a user has exceeded their daily debit limit based on their transaction history.

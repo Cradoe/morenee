@@ -31,6 +31,8 @@ var (
 	ErrDuplicateTransfer           = errors.New("this appears to be a duplicate transaction")
 	ErrInvalidPin                  = errors.New("invalid pin")
 	ErrWalletNotFound              = errors.New("wallet not found")
+	ErrInvalidStartDate            = errors.New("invalid start date format. Use YYYY-MM-DD")
+	ErrInvalidEndDate              = errors.New("invalid end_date format. Use YYYY-MM-DD")
 )
 
 const (
@@ -345,14 +347,25 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 func (h *RouteHandler) HandleWalletTransactions(w http.ResponseWriter, r *http.Request) {
 	walletId := r.PathValue("id")
 
-	transactions, found, err := h.DB.GetTransactionsByWalletId(walletId)
+	var filterOptions = h.retrieveQueryValues(r)
+
+	transactions, found, err := h.DB.GetTransactionsByWalletId(walletId, &database.FilterTransactionsOptions{
+		StartDate:   filterOptions.StartDate,
+		EndDate:     filterOptions.EndDate,
+		SearchQuery: filterOptions.Search,
+		Limit:       filterOptions.Limit,
+		Offset:      filterOptions.Offset,
+	})
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
-
 	if !found {
-		h.ErrHandler.NotFound(w, r)
+		message := "No transaction found"
+		err = response.JSONOkResponse(w, []TransactionResponseData{}, message, nil)
+		if err != nil {
+			h.ErrHandler.ServerError(w, r, err)
+		}
 		return
 	}
 
