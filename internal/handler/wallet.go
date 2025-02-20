@@ -135,7 +135,11 @@ func (h *RouteHandler) HandleUserWallets(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !found {
-		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
+		message := "No wallet found"
+		err = response.JSONOkResponse(w, []WalletResponseData{}, message, nil)
+		if err != nil {
+			h.ErrHandler.ServerError(w, r, err)
+		}
 		return
 	}
 
