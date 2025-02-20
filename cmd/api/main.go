@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 
 	"github.com/cradoe/morenee/internal/app"
+	seeders "github.com/cradoe/morenee/internal/seeder"
 	"github.com/cradoe/morenee/internal/version"
 	"github.com/cradoe/morenee/internal/worker"
 )
@@ -40,9 +41,12 @@ func run(logger *slog.Logger) error {
 	// Let's ensure the database connection is properly closed when the application ends
 	defer application.DB.Close()
 
+	// let's create and run seeders
+	seeder := seeders.New(application.DB)
+	seeder.Run()
+
 	// These topics are required to ensure that messages for various events (e.g., transfer debit, credit, success)
 	// are properly published and consumed without errors.
-
 	workerTopics := []string{worker.TransferDebitTopic, worker.TransferCreditTopic, worker.TransferSuccessTopic}
 	// Ensure that the specified Kafka topics exist before producing or consuming messages.
 	// This step is important to avoid runtime errors or message loss due to missing topics.
@@ -56,7 +60,6 @@ func run(logger *slog.Logger) error {
 	defer cancel()
 
 	// Start workers
-
 	wk := worker.New(&worker.Worker{
 		KafkaStream: application.Kafka,
 		DB:          application.DB,

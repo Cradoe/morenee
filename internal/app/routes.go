@@ -42,6 +42,15 @@ func (app *Application) routes() http.Handler {
 	mux.Handle("GET /account/next-of-kin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleGetNextOfKin)))
 	mux.Handle("POST /account/next-of-kin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleAddNextOfKin)))
 
+	// user KYC data  routes
+	mux.Handle("POST /account/kyc/bvn", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleSaveUserBVN)))
+	mux.Handle("POST /account/kyc", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleSaveKYCData)))
+	mux.Handle("GET /account/kyc", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleGetAllUserKYCData)))
+
+	// KYC routes
+	mux.Handle("GET /kyc", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleKYCs)))
+	mux.Handle("GET /kyc/{id}", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleSingleYC)))
+
 	// Wallet routes
 	mux.Handle("GET /wallets", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleUserWallets)))
 	mux.Handle("GET /wallets/{id}/details", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleWalletDetails)))

@@ -1,0 +1,2 @@
+ALTER TABLE users 
+ADD COLUMN kyc_level_id INT REFERENCES kyc_levels(id)  ON DELETE RESTRICT 

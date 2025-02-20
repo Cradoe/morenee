@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -33,15 +34,16 @@ const (
 )
 
 type UserResponseData struct {
-	ID          string     `json:"id"`
-	FirstName   string     `json:"first_name"`
-	LastName    string     `json:"last_name"`
-	Email       string     `json:"email"`
-	Image       string     `json:"image"`
-	PhoneNumber string     `json:"phone_number"`
-	Gender      string     `json:"gender"`
-	CreatedAt   time.Time  `json:"created_at"`
-	VerifiedAt  *time.Time `json:"verified_at"`
+	ID          string           `json:"id"`
+	FirstName   string           `json:"first_name"`
+	LastName    string           `json:"last_name"`
+	Email       string           `json:"email"`
+	Image       string           `json:"image"`
+	PhoneNumber string           `json:"phone_number"`
+	Gender      string           `json:"gender"`
+	CreatedAt   time.Time        `json:"created_at"`
+	VerifiedAt  *time.Time       `json:"verified_at"`
+	KYCLevel    *KYCResponseData `json:"kyc_level"`
 }
 
 type MiniUserWithWallet struct {
@@ -153,6 +155,23 @@ func (h *RouteHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request)
 		Gender:      user.Gender,
 		CreatedAt:   user.CreatedAt,
 		VerifiedAt:  verifiedAt,
+	}
+
+	var kycLevelIDStr string
+	if user.KYCLevelID.Valid {
+		kycLevelIDStr = fmt.Sprintf("%d", user.KYCLevelID.Int16)
+
+		kycLevel, kycLevelExists, err := h.DB.GetKYC(kycLevelIDStr)
+		if err != nil {
+			h.ErrHandler.ServerError(w, r, err)
+		}
+
+		if kycLevelExists {
+			userResponse.KYCLevel = &KYCResponseData{
+				ID:        kycLevel.ID,
+				LevelName: kycLevel.LevelName,
+			}
+		}
 	}
 
 	message := "Profile fetched successfully"

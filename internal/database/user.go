@@ -9,6 +9,7 @@ import (
 
 type User struct {
 	ID             string         `db:"id"`
+	KYCLevelID     sql.NullInt16  `db:"kyc_level_id"`
 	FirstName      string         `db:"first_name"`
 	LastName       string         `db:"last_name"`
 	PhoneNumber    string         `db:"phone_number"`

@@ -1,0 +1,2 @@
+ALTER TABLE user_kyc_data
+ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT NOW();
