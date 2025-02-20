@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"net/http"
+	"time"
 
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/database"
@@ -15,6 +16,15 @@ type WalletMiniData struct {
 	ID            string `json:"id"`
 	AccountNumber string `json:"account_number"`
 	BankName      string `json:"bank_name"`
+}
+type WalletResponseData struct {
+	ID            string    `json:"id"`
+	AccountNumber string    `json:"account_number"`
+	BankName      string    `json:"bank_name"`
+	Balance       float64   `json:"balance"`
+	Currency      string    `json:"currency"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 func (h *RouteHandler) generateWallet(user_id string, phone_number string, tx *sql.Tx) (*database.Wallet, error) {
@@ -79,12 +89,14 @@ func (h *RouteHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Reques
 	walletID := r.PathValue("id")
 
 	wallet, found, err := h.DB.GetWallet(walletID)
-	if !found {
-		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
-		return
-	}
+
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	if !found {
+		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
 
@@ -97,12 +109,14 @@ func (h *RouteHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Reques
 
 	message := "Wallet details fetched successfully"
 
-	data := map[string]any{
-		"balance":        wallet.Balance,
-		"currency":       wallet.Currency,
-		"account_number": wallet.AccountNumber,
-		"created_at":     wallet.CreatedAt,
-		"status":         wallet.Status,
+	data := &WalletResponseData{
+		ID:            wallet.ID,
+		Balance:       wallet.Balance,
+		BankName:      BankName,
+		Currency:      wallet.Currency,
+		AccountNumber: wallet.AccountNumber,
+		Status:        wallet.Status,
+		CreatedAt:     wallet.CreatedAt,
 	}
 	err = response.JSONOkResponse(w, data, message, nil)
 
@@ -112,33 +126,35 @@ func (h *RouteHandler) HandleWalletDetails(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *RouteHandler) HandleUserWallets(w http.ResponseWriter, r *http.Request) {
-	user := context.ContextGetAuthenticatedUser((r))
+	user := context.ContextGetAuthenticatedUser(r)
 
 	wallets, found, err := h.DB.GetWalletsByUserId(user.ID)
-	if !found {
-		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
-		return
-	}
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	message := "Wallet details successfully"
+	if !found {
+		response.JSONErrorResponse(w, nil, ErrWalletNotFound.Error(), http.StatusUnprocessableEntity, nil)
+		return
+	}
 
-	data := make([]map[string]any, len(wallets))
+	message := "Wallet details retrieved successfully"
+
+	data := make([]*WalletResponseData, len(wallets))
 	for i, wallet := range wallets {
-		data[i] = map[string]any{
-			"id":             wallet.ID,
-			"balance":        wallet.Balance,
-			"currency":       wallet.Currency,
-			"account_number": wallet.AccountNumber,
-			"created_at":     wallet.CreatedAt,
-			"status":         wallet.Status,
+		data[i] = &WalletResponseData{
+			ID:            wallet.ID,
+			Balance:       wallet.Balance,
+			BankName:      BankName,
+			Currency:      wallet.Currency,
+			AccountNumber: wallet.AccountNumber,
+			Status:        wallet.Status,
+			CreatedAt:     wallet.CreatedAt,
 		}
 	}
-	err = response.JSONOkResponse(w, data, message, nil)
 
+	err = response.JSONOkResponse(w, data, message, nil)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 	}
