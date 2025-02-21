@@ -7,7 +7,8 @@ type Config struct {
 		Dsn         string
 		Automigrate bool
 	}
-	Jwt struct {
+	RedisServer string
+	Jwt         struct {
 		SecretKey string
 	}
 	Notifications struct {

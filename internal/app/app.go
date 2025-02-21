@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/cradoe/morenee/internal/cache"
 	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/env"
@@ -21,6 +22,7 @@ import (
 type Application struct {
 	Config       config.Config
 	DB           *database.DB
+	Cache        *cache.Cache
 	Logger       *slog.Logger
 	Mailer       *smtp.Mailer
 	WG           *sync.WaitGroup
@@ -63,6 +65,8 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 	cfg.FileUploader.CloudName = env.GetString("CLOUDINARY_CLOUD_NAME", "")
 	cfg.FileUploader.ApiSecret = env.GetString("CLOUDINARY_API_SECRET", "")
 
+	cfg.RedisServer = env.GetString("REDIS_SERVER", "localhost:6379")
+
 	db, err := database.New(cfg.Db.Dsn, cfg.Db.Automigrate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
@@ -85,9 +89,14 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	fileUploader := file.New(cfg.FileUploader.CloudName, cfg.FileUploader.ApiKey, cfg.FileUploader.ApiSecret)
 
+	// cache store
+	redisCache := cache.New(cfg.RedisServer, 0)
+	defer redisCache.Close()
+
 	app := &Application{
 		Config:       cfg,
 		DB:           db,
+		Cache:        redisCache,
 		Logger:       logger,
 		Mailer:       mailer,
 		errorHandler: errorHandler,
