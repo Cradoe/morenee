@@ -34,6 +34,10 @@ func (app *Application) routes() http.Handler {
 	// Auth routes
 	mux.HandleFunc("POST /auth/register", routeHandler.HandleAuthRegister)
 	mux.HandleFunc("POST /auth/login", routeHandler.HandleAuthLogin)
+	mux.HandleFunc("POST /auth/verify-account", routeHandler.HandleVerifyAccount)
+	mux.HandleFunc("POST /auth/verify-account/resend", routeHandler.HandleResendVerificationOTP)
+	mux.HandleFunc("POST /auth/forgot-password", routeHandler.HandleForgotPassword)
+	mux.HandleFunc("POST /auth/reset-password", routeHandler.HandleResetPassword)
 
 	// Account routes
 	mux.Handle("PATCH /account/pin", middlewareRepo.RequireAuthenticatedUser(http.HandlerFunc(routeHandler.HandleSetAccountPin)))

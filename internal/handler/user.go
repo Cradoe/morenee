@@ -22,6 +22,12 @@ const (
 	// UserActivityLogPinChangeDescription is used to log when a user changes their PIN for security purposes.
 	UserActivityLogPinChangeDescription = "User pin change"
 
+	// UserActivityLogAccountVerifiedDescription is used when user has verified their account
+	UserActivityLogAccountVerifiedDescription = "User account verified"
+
+	// UserActivityLogPasswordResetDescription is used when user reset their password
+	UserActivityLogPasswordResetDescription = "User reset password"
+
 	// UserActivityLogLoginDescription is used when a user successfully logs into the platform.
 	UserActivityLogLoginDescription = "User login"
 

@@ -27,6 +27,10 @@ type User struct {
 }
 
 const (
+	// UserAccountActivePending indicates that the user's account has not been verified
+	// This is the default status after registration
+	UserAccountActivePending = "pending"
+
 	// UserAccountActiveStatus indicates that the user's account is active and fully functional.
 	// The user can log in, perform transactions, and access all account features.
 	UserAccountActiveStatus = "active"
@@ -74,6 +78,45 @@ func (db *DB) InsertUser(user *User, tx *sql.Tx) (string, error) {
 	}
 
 	return id, nil
+}
+
+func (db *DB) VerifyUserAccount(id string, tx *sql.Tx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	query := `UPDATE users SET status = $1, verified_at = $2 WHERE id = $3`
+
+	if tx != nil {
+		err := tx.QueryRowContext(ctx, query,
+			UserAccountActiveStatus,
+			time.Now(),
+			id,
+		).Scan(&id)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := db.ExecContext(ctx, query, UserAccountActiveStatus, time.Now(), id)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DB) UpdateUserPassword(id, password string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	query := `UPDATE users SET password = $1 WHERE id = $2`
+
+	_, err := db.ExecContext(ctx, query, password, id)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (db *DB) GetUser(id string) (*User, bool, error) {

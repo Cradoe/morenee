@@ -1,0 +1,50 @@
+{{define "subject"}}Verify Your Account - OTP Confirmation{{end}}
+
+{{define "plainBody"}}
+Hi {{.Name}},
+
+Thank you for signing up with {{.BankName}}! To complete your account verification, use the OTP below:
+
+OTP: {{.OTP}}
+
+This OTP will expire in {{.OTPExpiration}} minutes.
+
+If you did not sign up for an account, please ignore this email or contact our support team.
+
+Best regards,  
+The {{.BankName}} Team
+{{end}}
+
+{{define "htmlBody"}}
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style>
+      body { font-family: Arial, sans-serif; }
+      .email-header { font-size: 20px; font-weight: bold; }
+      .email-body { font-size: 16px; margin-top: 10px; }
+      .otp { font-size: 18px; font-weight: bold; color: #d9534f; }
+    </style>
+  </head>
+  <body>
+    <p class="email-header">Hi {{.Name}},</p>
+    <p class="email-body">
+      Thank you for signing up with <strong>{{.BankName}}</strong>!  
+      To complete your account verification, use the OTP below:
+    </p>
+    <p class="otp">OTP: {{.OTP}}</p>
+    <p class="email-body">
+      This OTP will expire in <strong>{{.OTPExpiration}} minutes</strong>.
+    </p>
+    <p class="email-body">
+      If you did not sign up for an account, please ignore this email or contact our support team.
+    </p>
+    <p class="email-body">
+      Best regards,<br/>
+      The {{.BankName}} Team
+    </p>
+  </body>
+</html>
+{{end}}

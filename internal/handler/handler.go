@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cradoe/morenee/internal/cache"
 	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/errHandler"
@@ -22,6 +23,7 @@ type RouteHandler struct {
 	Helper       *helper.HelperRepository
 	Kafka        *stream.KafkaStream
 	FileUploader *file.FileUploader
+	Cache        *cache.Cache
 }
 
 func NewRouteHandler(handler *RouteHandler) *RouteHandler {
@@ -33,6 +35,7 @@ func NewRouteHandler(handler *RouteHandler) *RouteHandler {
 		Helper:       handler.Helper,
 		Kafka:        handler.Kafka,
 		FileUploader: handler.FileUploader,
+		Cache:        handler.Cache,
 	}
 }
 

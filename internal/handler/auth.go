@@ -120,17 +120,22 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// generate  a wallet for the created user
-	wallet, err := h.generateWallet(userID, createdUser.PhoneNumber, tx)
-	if err != nil {
-		h.ErrHandler.ServerError(w, r, err)
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
+
+	// send verification OTP
+	h.Helper.BackgroundTask(r, func() error {
+		err = h.generateAndSendVerificationOTP(createdUser)
+
+		if err != nil {
+			log.Printf("Error sending verification email: %v", err)
+			return err
+		}
+
+		return nil
+	})
 
 	h.Helper.BackgroundTask(r, func() error {
 		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
@@ -148,21 +153,6 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 		return nil
 	})
 
-	h.Helper.BackgroundTask(r, func() error {
-		emailData := h.Helper.NewEmailData()
-		emailData["Name"] = createdUser.FirstName + " " + createdUser.LastName
-		emailData["AccountNumber"] = wallet.AccountNumber
-		emailData["BankName"] = BankName
-
-		err = h.Mailer.Send(createdUser.Email, emailData, "welcome-email.tmpl")
-		if err != nil {
-			log.Printf("Error send welcome email: %v", err)
-			return err
-		}
-
-		return nil
-	})
-
 	message := "Account created successfully"
 
 	err = response.JSONCreatedResponse(w, nil, message)
@@ -170,6 +160,36 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 		h.ErrHandler.ServerError(w, r, err)
 	}
 
+}
+
+func (h *RouteHandler) generateAndSendVerificationOTP(user *database.User) error {
+	otp, err := gopass.GenerateOTP(5)
+
+	if err != nil {
+		return err
+	}
+
+	// save the otp to cache
+	cacheKey := "verify-account-otp:" + user.ID
+	cacheExpiration := time.Hour
+	err = h.Cache.Set(cacheKey, otp, cacheExpiration)
+	if err != nil {
+		return err
+	}
+
+	emailData := h.Helper.NewEmailData()
+	emailData["Name"] = user.FirstName + " " + user.LastName
+	emailData["OTP"] = otp
+	emailData["OTPExpiration"] = cacheExpiration
+	emailData["BankName"] = BankName
+
+	err = h.Mailer.Send(user.Email, emailData, "verify-account.tmpl")
+	if err != nil {
+		log.Printf("Error verify account email: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
@@ -335,5 +355,328 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 	}
+
+}
+
+func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email     string              `json:"email"`
+		OTP       string              `json:"otp"`
+		Validator validator.Validator `json:"-"`
+	}
+	err := request.DecodeJSON(w, r, &input)
+	if err != nil {
+		h.ErrHandler.BadRequest(w, r, err)
+		return
+	}
+
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
+
+	input.Validator.Check(validator.NotBlank(input.OTP), "OTP is required")
+
+	user, found, err := h.DB.GetUserByEmail(input.Email)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	input.Validator.Check(found, "Email not recognized")
+	if input.Validator.HasErrors() {
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
+		return
+	}
+
+	// get stored otp from cache
+
+	cacheKey := "verify-account-otp:" + user.ID
+	storedOTP, err := h.Cache.Get(cacheKey)
+	if err != nil {
+		message := "Invalid/expired OTP"
+		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+	}
+	if storedOTP != input.OTP {
+		message := "Invalid/expired OTP"
+		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+	}
+
+	// we are using transactions to make sure that if any of the operations fail
+	// we can rollback the changes and return an error to the client
+	// ...without having incomplete data in the operations
+	tx, err := h.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	defer func() {
+		// always make sure it rollback, if there is an error
+		// ...and the transaction is not committed
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// update user account to verified
+	err = h.DB.VerifyUserAccount(user.ID, tx)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	// generate  a wallet for the created user
+	wallet, err := h.generateWallet(user.ID, user.PhoneNumber, tx)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	h.Helper.BackgroundTask(r, func() error {
+		emailData := h.Helper.NewEmailData()
+		emailData["Name"] = user.FirstName + " " + user.LastName
+		emailData["AccountNumber"] = wallet.AccountNumber
+		emailData["BankName"] = BankName
+
+		err = h.Mailer.Send(user.Email, emailData, "welcome-email.tmpl")
+		if err != nil {
+			log.Printf("Error send welcome email: %v", err)
+			return err
+		}
+
+		return nil
+	})
+
+	h.Helper.BackgroundTask(r, func() error {
+		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
+			UserID:      user.ID,
+			Entity:      database.ActivityLogUserEntity,
+			EntityId:    user.ID,
+			Description: UserActivityLogAccountVerifiedDescription,
+		})
+
+		if err != nil {
+			log.Printf("Error logging account verification action: %v", err)
+			return err
+		}
+
+		return nil
+	})
+
+	message := "Account verified successfully"
+	err = response.JSONOkResponse(w, nil, message, nil)
+
+}
+
+func (h *RouteHandler) HandleResendVerificationOTP(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email     string              `json:"email"`
+		Validator validator.Validator `json:"-"`
+	}
+	err := request.DecodeJSON(w, r, &input)
+	if err != nil {
+		h.ErrHandler.BadRequest(w, r, err)
+		return
+	}
+
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
+
+	user, found, err := h.DB.GetUserByEmail(input.Email)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	input.Validator.Check(found, "Email not recognized")
+	if input.Validator.HasErrors() {
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
+		return
+	}
+
+	// check if account has already been verified
+	if user.Status == database.UserAccountActiveStatus {
+
+	}
+	err = h.generateAndSendVerificationOTP(user)
+
+	if err != nil {
+		log.Printf("Error sending verification email: %v", err)
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	message := "Verification OTP sent to your email"
+	err = response.JSONOkResponse(w, nil, message, nil)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+}
+
+func (h *RouteHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email     string              `json:"email"`
+		Validator validator.Validator `json:"-"`
+	}
+	err := request.DecodeJSON(w, r, &input)
+	if err != nil {
+		h.ErrHandler.BadRequest(w, r, err)
+		return
+	}
+
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
+
+	user, found, err := h.DB.GetUserByEmail(input.Email)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	input.Validator.Check(found, "Email not recognized")
+	if input.Validator.HasErrors() {
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
+		return
+	}
+
+	otp, err := gopass.GenerateOTP(5)
+
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	// save the otp to cache
+	cacheKey := "forgot-password-otp:" + user.ID
+	cacheExpiration := time.Hour
+	err = h.Cache.Set(cacheKey, otp, cacheExpiration)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	// send otp as email to user
+	emailData := h.Helper.NewEmailData()
+	emailData["Name"] = user.FirstName + " " + user.LastName
+	emailData["OTP"] = otp
+	emailData["OTPExpiration"] = cacheExpiration
+
+	err = h.Mailer.Send(user.Email, emailData, "forgot-password.tmpl")
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	message := "OTP sent to your email"
+	err = response.JSONOkResponse(w, nil, message, nil)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+}
+
+func (h *RouteHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email     string              `json:"email"`
+		Password  string              `json:"password"`
+		OTP       string              `json:"otp"`
+		Validator validator.Validator `json:"-"`
+	}
+	err := request.DecodeJSON(w, r, &input)
+	if err != nil {
+		h.ErrHandler.BadRequest(w, r, err)
+		return
+	}
+
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
+
+	input.Validator.Check(validator.NotBlank(input.OTP), "OTP is required")
+
+	// we need to validate the password to make sure it meets the minimum requirements
+	// the Validate function returns a slice of errors if the password does not meet the requirements
+	_, errs := gopass.Validate(input.Password)
+
+	if errs != nil {
+		// return any errors found before we check the other fields
+		// It's important that users have a strong password
+		h.ErrHandler.FailedValidation(w, r, errs)
+		return
+	}
+
+	user, found, err := h.DB.GetUserByEmail(input.Email)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	input.Validator.Check(found, "Email not recognized")
+	if input.Validator.HasErrors() {
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
+		return
+	}
+
+	// get stored otp from cache
+	cacheKey := "forgot-password-otp:" + user.ID
+	storedOTP, err := h.Cache.Get(cacheKey)
+	if err != nil {
+		message := "Invalid/expired OTP"
+		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+	}
+	if storedOTP != input.OTP {
+		message := "Invalid/expired OTP"
+		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+	}
+
+	hashedPassword, err := gopass.Hash(input.Password)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	err = h.DB.UpdateUserPassword(user.ID, hashedPassword)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	h.Helper.BackgroundTask(r, func() error {
+		emailData := h.Helper.NewEmailData()
+		emailData["Name"] = user.FirstName + " " + user.LastName
+		emailData["BankName"] = BankName
+
+		err = h.Mailer.Send(user.Email, emailData, "password-reset.tmpl")
+		if err != nil {
+			log.Printf("Error sending password reset email: %v", err)
+			return err
+		}
+
+		return nil
+	})
+
+	h.Helper.BackgroundTask(r, func() error {
+		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
+			UserID:      user.ID,
+			Entity:      database.ActivityLogUserEntity,
+			EntityId:    user.ID,
+			Description: UserActivityLogPasswordResetDescription,
+		})
+
+		if err != nil {
+			log.Printf("Error logging password reset action: %v", err)
+			return err
+		}
+
+		return nil
+	})
+
+	message := "Password reset successfully"
+	err = response.JSONOkResponse(w, nil, message, nil)
 
 }
