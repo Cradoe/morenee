@@ -318,7 +318,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 
 	message := "Transfer initiated successfully"
 
-	transactionData, _, err := h.DB.GetTransaction(transactionId)
+	transactionData, found, err := h.DB.GetTransaction(transactionId)
 	if !found {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -326,7 +326,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 
 	transferRes := h.formTransactionResponseData(transactionData)
 
-	jsonMessage, err := json.Marshal(transferRes)
+	jsonMessage, err := json.Marshal(&transferRes)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return

@@ -84,8 +84,7 @@ func (db *DB) GetWalletsByUserId(userID string) ([]Wallet, bool, error) {
 	var wallets []Wallet
 
 	query := `
-        SELECT id, balance, currency, account_number, status, single_transfer_limit, daily_transfer_limit, 
-		max_balance, created_at FROM wallets WHERE user_id=$1 AND deleted_at IS NULL`
+        SELECT id, balance, currency, account_number, status, created_at FROM wallets WHERE user_id=$1 AND deleted_at IS NULL`
 
 	err := db.SelectContext(ctx, &wallets, query, userID)
 
@@ -106,8 +105,7 @@ func (db *DB) GetWallet(id string) (*Wallet, bool, error) {
 	var wallet Wallet
 
 	query := `
-        SELECT id, user_id, balance, currency, account_number, status, single_transfer_limit, daily_transfer_limit, 
-		max_balance, created_at FROM wallets WHERE id=$1 AND deleted_at IS NULL`
+        SELECT id, user_id, balance, currency, account_number, status, created_at FROM wallets WHERE id=$1 AND deleted_at IS NULL`
 
 	err := db.GetContext(ctx, &wallet, query, id)
 

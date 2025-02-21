@@ -23,7 +23,7 @@ type User struct {
 	VerifiedAt     sql.NullTime   `db:"verified_at"`
 	HashedPassword string         `db:"hashed_password"`
 
-	Wallet Wallet `db:"wallet"`
+	// Wallet Wallet `db:"wallet"`
 }
 
 const (

@@ -52,7 +52,7 @@ func (wk *Worker) DebitWorker() {
 				go func(msg *kafka.Message) {
 					message := msg.Value
 					var transferReq *handler.TransactionResponseData
-					json.Unmarshal(message, transferReq)
+					json.Unmarshal(message, &transferReq)
 
 					retryCount := 0
 					for retryCount < maxRetries {

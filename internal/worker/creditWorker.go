@@ -54,7 +54,7 @@ func (wk *Worker) CreditWorker() {
 				go func(msg *kafka.Message) {
 					message := msg.Value
 					var transferReq *handler.TransactionResponseData
-					json.Unmarshal(message, transferReq)
+					json.Unmarshal(message, &transferReq)
 
 					retryCount := 0
 					for retryCount < maxRetries {
@@ -138,9 +138,20 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 		}
 
 		// Step 3: Determine recipient's KYC level
-		recipientKYCLevel, err := wk.getRecipientKYCLevelOrLockWallet(recipient)
+
+		if !recipient.KYCLevelID.Valid {
+			// user is still in tier 0
+			err := wk.DB.LockWallet(transferReq.Recipient.Wallet.ID)
+			if err != nil {
+				return errors.New("error locking recipient account due to missing KYC level 1")
+			}
+
+			return nil
+		}
+		kycLevelIDStr := fmt.Sprintf("%d", recipient.KYCLevelID.Int16)
+		recipientKYCLevel, _, err := wk.DB.GetKYC(kycLevelIDStr)
 		if err != nil {
-			return err
+			return errors.New("could not get user kyc")
 		}
 
 		// Step 4: Check balance limit and lock wallet if exceeded
@@ -231,29 +242,4 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 	}
 
 	return true
-}
-
-// Helper function to get the recipient's KYC level
-func (wk *Worker) getRecipientKYCLevelOrLockWallet(recipient *database.User) (*database.KYCLevel, error) {
-	if !recipient.KYCLevelID.Valid {
-		return nil, errors.New("recipient KYC level is invalid")
-	}
-
-	kycLevelIDStr := fmt.Sprintf("%d", recipient.KYCLevelID.Int16)
-	level, kycLevelExists, err := wk.DB.GetKYC(kycLevelIDStr)
-	if err != nil {
-		log.Printf("Error getting KYC level: %v", err)
-		return nil, errors.New("could not check account limit")
-	}
-
-	if !kycLevelExists {
-		// Lock wallet if KYC level does not exist
-		err = wk.DB.LockWallet(recipient.Wallet.ID)
-		if err != nil {
-			log.Printf("Error locking recipient account due to missing KYC level: %v", err)
-		}
-		return nil, errors.New("recipient account locked due to missing KYC level")
-	}
-
-	return level, nil
 }
