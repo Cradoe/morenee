@@ -32,7 +32,7 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 
 	query := `
 		INSERT INTO wallets (user_id, account_number)
-		VALUES ($1, $2, $3, $4, $5)
+		VALUES ($1, $2)
 		RETURNING id`
 	if tx != nil {
 		err := tx.QueryRowContext(ctx, query,

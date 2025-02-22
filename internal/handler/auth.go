@@ -127,6 +127,7 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 
 	// send verification OTP
 	h.Helper.BackgroundTask(r, func() error {
+		createdUser.ID = userID
 		err = h.generateAndSendVerificationOTP(createdUser)
 
 		if err != nil {
@@ -163,6 +164,7 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 }
 
 func (h *RouteHandler) generateAndSendVerificationOTP(user *database.User) error {
+
 	otp, err := gopass.GenerateOTP(5)
 
 	if err != nil {
@@ -172,6 +174,7 @@ func (h *RouteHandler) generateAndSendVerificationOTP(user *database.User) error
 	// save the otp to cache
 	cacheKey := "verify-account-otp:" + user.ID
 	cacheExpiration := time.Hour
+
 	err = h.Cache.Set(cacheKey, otp, cacheExpiration)
 	if err != nil {
 		return err
@@ -287,15 +290,15 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check that account is active
-	if user.Status != database.UserAccountActiveStatus {
-
-		message := "Account has been locked. Please contact support"
-
+	if user.Status == database.UserAccountActivePending {
+		message := "Account not yet verified"
 		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
+		return
+	}
 
-		if err != nil {
-			h.ErrHandler.ServerError(w, r, err)
-		}
+	if user.Status == database.UserAccountLockedStatus {
+		message := "Account has been locked. Please contact support"
+		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
 		return
 	}
 
@@ -387,17 +390,36 @@ func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// get stored otp from cache
+	// check if account has already been verified
+	if user.VerifiedAt.Valid {
+		message := "Account already verified"
+		response.JSONErrorResponse(w, nil, message, http.StatusBadRequest, nil)
+		return
+	}
 
+	// get stored otp from cache
 	cacheKey := "verify-account-otp:" + user.ID
-	storedOTP, err := h.Cache.Get(cacheKey)
+	cacheExists, err := h.Cache.Exists(cacheKey)
 	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	if !cacheExists {
 		message := "Invalid/expired OTP"
 		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+		return
+	}
+
+	storedOTP, err := h.Cache.Get(cacheKey)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
 	}
 	if storedOTP != input.OTP {
 		message := "Invalid/expired OTP"
 		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+		return
 	}
 
 	// we are using transactions to make sure that if any of the operations fail
@@ -469,7 +491,6 @@ func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Reques
 
 	message := "Account verified successfully"
 	err = response.JSONOkResponse(w, nil, message, nil)
-
 }
 
 func (h *RouteHandler) HandleResendVerificationOTP(w http.ResponseWriter, r *http.Request) {
@@ -499,9 +520,12 @@ func (h *RouteHandler) HandleResendVerificationOTP(w http.ResponseWriter, r *htt
 	}
 
 	// check if account has already been verified
-	if user.Status == database.UserAccountActiveStatus {
-
+	if user.VerifiedAt.Valid {
+		message := "Account already verified"
+		response.JSONErrorResponse(w, nil, message, http.StatusBadRequest, nil)
+		return
 	}
+
 	err = h.generateAndSendVerificationOTP(user)
 
 	if err != nil {
@@ -553,7 +577,7 @@ func (h *RouteHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Reque
 
 	// save the otp to cache
 	cacheKey := "forgot-password-otp:" + user.ID
-	cacheExpiration := time.Hour
+	cacheExpiration := time.Second * 120
 	err = h.Cache.Set(cacheKey, otp, cacheExpiration)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
@@ -624,14 +648,28 @@ func (h *RouteHandler) HandleResetPassword(w http.ResponseWriter, r *http.Reques
 
 	// get stored otp from cache
 	cacheKey := "forgot-password-otp:" + user.ID
-	storedOTP, err := h.Cache.Get(cacheKey)
+
+	cacheExists, err := h.Cache.Exists(cacheKey)
 	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
+
+	if !cacheExists {
 		message := "Invalid/expired OTP"
 		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+		return
+	}
+
+	storedOTP, err := h.Cache.Get(cacheKey)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
 	}
 	if storedOTP != input.OTP {
 		message := "Invalid/expired OTP"
 		response.JSONErrorResponse(w, nil, message, http.StatusUnprocessableEntity, nil)
+		return
 	}
 
 	hashedPassword, err := gopass.Hash(input.Password)

@@ -26,6 +26,7 @@ func (app *Application) routes() http.Handler {
 		Helper:       app.Helper,
 		Kafka:        app.Kafka,
 		FileUploader: app.FileUploader,
+		Cache:        app.Cache,
 	})
 
 	// Health-check route

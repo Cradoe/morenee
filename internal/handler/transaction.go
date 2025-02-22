@@ -265,23 +265,24 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	// check sender kyc to be sure they are at least in kyc level 1
 	var kycLevelIDStr string
 	var senderKycLevel *database.KYCLevel
-	if sender.KYCLevelID.Valid {
-		kycLevelIDStr = fmt.Sprintf("%d", sender.KYCLevelID.Int16)
-
-		level, kycLevelExists, err := h.DB.GetKYC(kycLevelIDStr)
-		if err != nil {
-			h.ErrHandler.ServerError(w, r, err)
-		}
-		if !kycLevelExists {
-			response.JSONErrorResponse(w, nil, ErrCompleteProfileSetup.Error(), http.StatusUnprocessableEntity, nil)
-			return
-		}
-		senderKycLevel = level
-
+	if !sender.KYCLevelID.Valid {
+		response.JSONErrorResponse(w, nil, ErrCompleteProfileSetup.Error(), http.StatusUnprocessableEntity, nil)
+		return
 	}
 
-	// check sender kyc to be sure they can transfer this amount
+	kycLevelIDStr = fmt.Sprintf("%d", sender.KYCLevelID.Int16)
 
+	level, kycLevelExists, err := h.DB.GetKYC(kycLevelIDStr)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+	}
+	if !kycLevelExists {
+		response.JSONErrorResponse(w, nil, ErrCompleteProfileSetup.Error(), http.StatusUnprocessableEntity, nil)
+		return
+	}
+	senderKycLevel = level
+
+	// check sender kyc to be sure they can transfer this amount
 	// check for single transfer limit
 	if senderKycLevel.SingleTransferLimit < input.Amount {
 		response.JSONErrorResponse(w, nil, ErrSingleTransferLimitExceeded.Error(), http.StatusUnprocessableEntity, nil)

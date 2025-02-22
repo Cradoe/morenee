@@ -41,7 +41,7 @@ func (db *DB) CreateActivityLog(log *ActivityLog) (*ActivityLog, error) {
 	var trans ActivityLog
 
 	query := `
-		INSERT INTO account_logs (user_id, entity, entity_id, description)
+		INSERT INTO activity_logs (user_id, entity, entity_id, description)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id`
 
@@ -71,7 +71,7 @@ func (db *DB) CountConsecutiveFailedLoginAttempts(userID, action_desc string) in
 	// Query the most recent login attempts for the user, limiting to the last 3 entries
 	query := `
 		SELECT description 
-		FROM account_logs 
+		FROM activity_logs 
 		WHERE user_id = $1 AND entity = $2 
 		ORDER BY created_at DESC 
 		LIMIT 3

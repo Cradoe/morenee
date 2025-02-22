@@ -87,11 +87,11 @@ func (db *DB) VerifyUserAccount(id string, tx *sql.Tx) error {
 	query := `UPDATE users SET status = $1, verified_at = $2 WHERE id = $3`
 
 	if tx != nil {
-		err := tx.QueryRowContext(ctx, query,
+		_, err := tx.ExecContext(ctx, query,
 			UserAccountActiveStatus,
 			time.Now(),
 			id,
-		).Scan(&id)
+		)
 		if err != nil {
 			return err
 		}
@@ -109,7 +109,7 @@ func (db *DB) UpdateUserPassword(id, password string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	query := `UPDATE users SET password = $1 WHERE id = $2`
+	query := `UPDATE users SET hashed_password = $1 WHERE id = $2`
 
 	_, err := db.ExecContext(ctx, query, password, id)
 	if err != nil {

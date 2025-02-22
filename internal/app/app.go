@@ -91,7 +91,7 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	// cache store
 	redisCache := cache.New(cfg.RedisServer, 0)
-	defer redisCache.Close()
+	// defer redisCache.Close()
 
 	app := &Application{
 		Config:       cfg,

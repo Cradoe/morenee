@@ -2,7 +2,6 @@ package file
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
@@ -38,6 +37,5 @@ func (f *FileUploader) UploadFile(fileName string) (string, error) {
 	}
 
 	// Return the uploaded file URL as a response
-	fmt.Printf("File uploaded successfully: %s\n", uploadResult.SecureURL)
 	return uploadResult.SecureURL, nil
 }
