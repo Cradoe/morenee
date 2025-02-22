@@ -145,14 +145,14 @@ func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (string, e
 	return id, nil
 }
 
-func (db *DB) UpdateTransactionStatus(transaction_id string, status string) (bool, error) {
+func (db *DB) UpdateTransactionStatus(transactionID string, status string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `
         UPDATE transactions SET status=$1 WHERE id=$2`
 
-	result, err := db.ExecContext(ctx, query, status, transaction_id)
+	result, err := db.ExecContext(ctx, query, status, transactionID)
 	if err != nil {
 		return false, err
 	}
@@ -168,27 +168,6 @@ func (db *DB) UpdateTransactionStatus(transaction_id string, status string) (boo
 	}
 
 	return true, nil
-}
-
-func (db *DB) FindTransactionByReference(reference_number string) (*Transaction, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
-	var trans Transaction
-
-	query := `
-        SELECT reference_number, status, created_at FROM transactions WHERE reference_number=$1`
-
-	err := db.GetContext(ctx, &trans, query, reference_number)
-
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-
-	return &trans, true, nil
 }
 
 func (db *DB) GetTransaction(id string) (*TransactionDetails, bool, error) {
