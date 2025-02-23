@@ -1,9 +1,11 @@
-package database
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type KYCData struct {
@@ -17,7 +19,22 @@ type KYCData struct {
 	Requirement string `db:"requirement"`
 }
 
-func (db *DB) SaveKYCData(userID, submissionData, requirementID string) error {
+type UserKycDataRepository interface {
+	Insert(userID, submissionData, requirementID string) error
+	GetAll(userID string) ([]KYCData, error)
+	GetByRequirementId(userID, kycRequirementID string) (*KYCData, bool, error)
+	UpgradeLevel(userID string) (bool, error)
+}
+
+type UserKycDataRepositoryImpl struct {
+	db *sqlx.DB
+}
+
+func NewUserKycDataRepository(db *sqlx.DB) UserKycDataRepository {
+	return &UserKycDataRepositoryImpl{db: db}
+}
+
+func (repo *UserKycDataRepositoryImpl) Insert(userID, submissionData, requirementID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -26,7 +43,7 @@ func (db *DB) SaveKYCData(userID, submissionData, requirementID string) error {
 		VALUES ($1, $2, $3)
 	`
 
-	_, err := db.ExecContext(ctx, query, userID, submissionData, requirementID)
+	_, err := repo.db.ExecContext(ctx, query, userID, submissionData, requirementID)
 	if err != nil {
 		return err
 	}
@@ -34,7 +51,7 @@ func (db *DB) SaveKYCData(userID, submissionData, requirementID string) error {
 	return nil
 }
 
-func (db *DB) GetUserKYCData(userID string) ([]KYCData, error) {
+func (repo *UserKycDataRepositoryImpl) GetAll(userID string) ([]KYCData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -57,7 +74,7 @@ func (db *DB) GetUserKYCData(userID string) ([]KYCData, error) {
 			ukd.user_id = $1
 	`
 
-	rows, err := db.QueryContext(ctx, query, userID)
+	rows, err := repo.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +104,7 @@ func (db *DB) GetUserKYCData(userID string) ([]KYCData, error) {
 	return kycDataList, nil
 }
 
-func (db *DB) GetUserKYCDataByRequirement(userID, kycRequirementID string) (*KYCData, bool, error) {
+func (repo *UserKycDataRepositoryImpl) GetByRequirementId(userID, kycRequirementID string) (*KYCData, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -102,7 +119,7 @@ func (db *DB) GetUserKYCDataByRequirement(userID, kycRequirementID string) (*KYC
 	`
 
 	var kycData KYCData
-	err := db.GetContext(ctx, &kycData, query, userID, kycRequirementID)
+	err := repo.db.GetContext(ctx, &kycData, query, userID, kycRequirementID)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -114,13 +131,13 @@ func (db *DB) GetUserKYCDataByRequirement(userID, kycRequirementID string) (*KYC
 	return &kycData, true, nil
 }
 
-func (db *DB) UpgradeUserKYCLevel(userID string) (bool, error) {
+func (repo *UserKycDataRepositoryImpl) UpgradeLevel(userID string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	// Step 1: Get current KYC level of the user
 	var currentLevelID int
-	err := db.QueryRowContext(ctx, "SELECT COALESCE(kyc_level_id, 0) FROM users WHERE id = $1", userID).Scan(&currentLevelID)
+	err := repo.db.QueryRowContext(ctx, "SELECT COALESCE(kyc_level_id, 0) FROM users WHERE id = $1", userID).Scan(&currentLevelID)
 	if err != nil {
 		return false, err
 	}
@@ -141,7 +158,7 @@ func (db *DB) UpgradeUserKYCLevel(userID string) (bool, error) {
 			AND ukd.id IS NULL;
 	`
 
-	rows, err := db.QueryContext(ctx, query, userID, currentLevelID)
+	rows, err := repo.db.QueryContext(ctx, query, userID, currentLevelID)
 	if err != nil {
 		return false, err
 	}
@@ -171,7 +188,7 @@ func (db *DB) UpgradeUserKYCLevel(userID string) (bool, error) {
 			id = $2;
 	`
 
-	_, err = db.ExecContext(ctx, upgradeQuery, currentLevelID, userID)
+	_, err = repo.db.ExecContext(ctx, upgradeQuery, currentLevelID, userID)
 	if err != nil {
 		return false, err
 	}

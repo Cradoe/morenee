@@ -1,4 +1,4 @@
-package database
+package repository
 
 import (
 	"context"
@@ -7,19 +7,9 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-)
 
-// type Transaction struct {
-// 	ID                string         `db:"id"`
-// 	SenderWalletID    string         `db:"sender_wallet_id"`
-// 	RecipientWalletID string         `db:"recipient_wallet_id"`
-// 	ReferenceNumber   string         `db:"reference_number"`
-// 	Amount            float64        `db:"amount"`
-// 	Description       sql.NullString `db:"description"`
-// 	Status            string         `db:"status"`
-// 	CreatedAt         time.Time      `db:"created_at"`
-// 	UpdatedAt         sql.NullTime   `db:"updated_at"`
-// }
+	"github.com/jmoiron/sqlx"
+)
 
 type Transaction struct {
 	ID                string         `db:"id"`
@@ -56,6 +46,22 @@ type TransactionDetails struct {
 	RecipientLastName  string `db:"recipient_last_name"`
 	RecipientWalletID  string `db:"recipient_wallet_id"`
 	RecipientAccount   string `db:"recipient_account_number"`
+}
+
+type TransactionRepository interface {
+	Insert(transaction *Transaction, tx *sql.Tx) (string, error)
+	UpdateStatus(transactionID string, status string) (bool, error)
+	GetOne(id string) (*TransactionDetails, bool, error)
+	FindAllByWalletId(walletId string, option *FilterTransactionsOptions) ([]*TransactionDetails, bool, error)
+	HasExceededDailyLimit(walletID string, intending_amount float64, dailyLimit float64) (bool, error)
+}
+
+type TransactionRepositoryImpl struct {
+	db *sqlx.DB
+}
+
+func NewTransactionRepository(db *sqlx.DB) TransactionRepository {
+	return &TransactionRepositoryImpl{db: db}
 }
 
 const getTransactionBasicQuery = `SELECT 
@@ -107,7 +113,7 @@ const (
 	TransactionStatusReversed = "reversed"
 )
 
-func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (string, error) {
+func (repo *TransactionRepositoryImpl) Insert(transaction *Transaction, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -129,7 +135,7 @@ func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (string, e
 			return "", err
 		}
 	} else {
-		err := db.GetContext(ctx, &id, query,
+		err := repo.db.GetContext(ctx, &id, query,
 			transaction.SenderWalletID,
 			transaction.RecipientWalletID,
 			transaction.Amount,
@@ -145,14 +151,14 @@ func (db *DB) CreateTransaction(transaction *Transaction, tx *sql.Tx) (string, e
 	return id, nil
 }
 
-func (db *DB) UpdateTransactionStatus(transactionID string, status string) (bool, error) {
+func (repo *TransactionRepositoryImpl) UpdateStatus(transactionID string, status string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `
         UPDATE transactions SET status=$1 WHERE id=$2`
 
-	result, err := db.ExecContext(ctx, query, status, transactionID)
+	result, err := repo.db.ExecContext(ctx, query, status, transactionID)
 	if err != nil {
 		return false, err
 	}
@@ -170,7 +176,7 @@ func (db *DB) UpdateTransactionStatus(transactionID string, status string) (bool
 	return true, nil
 }
 
-func (db *DB) GetTransaction(id string) (*TransactionDetails, bool, error) {
+func (repo *TransactionRepositoryImpl) GetOne(id string) (*TransactionDetails, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -181,7 +187,7 @@ func (db *DB) GetTransaction(id string) (*TransactionDetails, bool, error) {
 		WHERE t.id = $1
 	`
 
-	err := db.GetContext(ctx, &transaction, query, id)
+	err := repo.db.GetContext(ctx, &transaction, query, id)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
@@ -202,7 +208,7 @@ type FilterTransactionsOptions struct {
 	Limit       int
 }
 
-func (db *DB) GetTransactionsByWalletId(walletId string, option *FilterTransactionsOptions) ([]*TransactionDetails, bool, error) {
+func (repo *TransactionRepositoryImpl) FindAllByWalletId(walletId string, option *FilterTransactionsOptions) ([]*TransactionDetails, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -278,7 +284,7 @@ func (db *DB) GetTransactionsByWalletId(walletId string, option *FilterTransacti
 	args = append(args, option.Offset)
 
 	var transactions []*TransactionDetails
-	err := db.SelectContext(ctx, &transactions, query, args...)
+	err := repo.db.SelectContext(ctx, &transactions, query, args...)
 	if err != nil {
 		return nil, false, err
 	}
@@ -293,7 +299,7 @@ func (db *DB) GetTransactionsByWalletId(walletId string, option *FilterTransacti
 // HasExceededDailyLimit checks whether a user has exceeded their daily debit limit based on their transaction history.
 // It sums all transactions initiated by the user for the current day with statuses "completed" or "pending".
 // The function then compares the total debit amount with the provided daily limit. If the total amount (including the current transaction) exceeds the limit, it returns true; otherwise, false.
-func (db *DB) HasExceededDailyLimit(walletID string, intending_amount float64, dailyLimit float64) (bool, error) {
+func (repo *TransactionRepositoryImpl) HasExceededDailyLimit(walletID string, intending_amount float64, dailyLimit float64) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -308,7 +314,7 @@ func (db *DB) HasExceededDailyLimit(walletID string, intending_amount float64, d
 		AND DATE(created_at) = CURRENT_DATE
 	`
 
-	err := db.GetContext(ctx, &totalDebit, query, walletID, TransactionStatusCompleted, TransactionStatusPending)
+	err := repo.db.GetContext(ctx, &totalDebit, query, walletID, TransactionStatusCompleted, TransactionStatusPending)
 	if err != nil {
 		return false, err
 	}

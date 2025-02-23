@@ -3,15 +3,15 @@ package worker
 import (
 	"context"
 
-	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/smtp"
 	"github.com/cradoe/morenee/internal/stream"
 )
 
 type Worker struct {
 	KafkaStream *stream.KafkaStream
-	DB          *database.DB
+	DB          repository.Database
 	Ctx         context.Context
 	Helper      *helper.HelperRepository
 	Mailer      *smtp.Mailer

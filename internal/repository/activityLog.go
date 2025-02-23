@@ -5,14 +5,21 @@
 // ...
 // We used polymorphism to define entity and entity_id
 // This allow our table to be used for different part of the application
-package database
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
+
+type ActivityRepository interface {
+	CountConsecutiveFailedLoginAttempts(userID, action_desc string) int
+	Insert(log *ActivityLog) (*ActivityLog, error)
+}
 
 type ActivityLog struct {
 	ID          string    `db:"id"`
@@ -34,7 +41,15 @@ const (
 	ActivityLogUserEntity = "user"
 )
 
-func (db *DB) CreateActivityLog(log *ActivityLog) (*ActivityLog, error) {
+type ActivityRepositoryImpl struct {
+	db *sqlx.DB
+}
+
+func NewActivityRepository(db *sqlx.DB) ActivityRepository {
+	return &ActivityRepositoryImpl{db: db}
+}
+
+func (repo *ActivityRepositoryImpl) Insert(log *ActivityLog) (*ActivityLog, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -45,7 +60,7 @@ func (db *DB) CreateActivityLog(log *ActivityLog) (*ActivityLog, error) {
 		VALUES ($1, $2, $3, $4)
 		RETURNING id`
 
-	err := db.GetContext(ctx, &trans, query,
+	err := repo.db.GetContext(ctx, &trans, query,
 		log.UserID,
 		log.Entity,
 		log.EntityId,
@@ -62,7 +77,7 @@ func (db *DB) CreateActivityLog(log *ActivityLog) (*ActivityLog, error) {
 // CountConsecutiveFailedLoginAttempts counts the number of consecutive failed login attempts for a user.
 // This function is used to determine if a user’s account should be temporarily locked after 3 consecutive failures.
 // It checks the most recent login attempts in descending order and counts failures until a successful login or the limit is reached.
-func (db *DB) CountConsecutiveFailedLoginAttempts(userID, action_desc string) int {
+func (repo *ActivityRepositoryImpl) CountConsecutiveFailedLoginAttempts(userID, action_desc string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -76,7 +91,7 @@ func (db *DB) CountConsecutiveFailedLoginAttempts(userID, action_desc string) in
 		ORDER BY created_at DESC 
 		LIMIT 3
 	`
-	err := db.SelectContext(ctx, &descriptions, query, userID, ActivityLogUserEntity)
+	err := repo.db.SelectContext(ctx, &descriptions, query, userID, ActivityLogUserEntity)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0

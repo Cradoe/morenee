@@ -1,7 +1,9 @@
-package database
+package repository
 
 import (
 	"context"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type KYCLevel struct {
@@ -15,7 +17,20 @@ type KYCLevel struct {
 	Requirements        []KYCLevelRequirement `db:"requirements"`
 }
 
-func (db *DB) GetKYCS() ([]KYCLevel, error) {
+type KycRepository interface {
+	GetAll() ([]KYCLevel, error)
+	GetOne(id string) (*KYCLevel, bool, error)
+}
+
+type KycRepositoryImpl struct {
+	db *sqlx.DB
+}
+
+func NewKycRepository(db *sqlx.DB) KycRepository {
+	return &KycRepositoryImpl{db: db}
+}
+
+func (repo *KycRepositoryImpl) GetAll() ([]KYCLevel, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -38,7 +53,7 @@ func (db *DB) GetKYCS() ([]KYCLevel, error) {
 			kl.level_name;
 	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := repo.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +115,7 @@ func (db *DB) GetKYCS() ([]KYCLevel, error) {
 
 	return kycLevels, nil
 }
-func (db *DB) GetKYC(id string) (*KYCLevel, bool, error) {
+func (repo *KycRepositoryImpl) GetOne(id string) (*KYCLevel, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -123,7 +138,7 @@ func (db *DB) GetKYC(id string) (*KYCLevel, bool, error) {
 			kl.id = $1;
 	`
 
-	rows, err := db.QueryContext(ctx, query, id)
+	rows, err := repo.db.QueryContext(ctx, query, id)
 	if err != nil {
 		return nil, false, err
 	}

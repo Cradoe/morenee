@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/handler"
+	database "github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/stream"
 )
 
@@ -90,14 +90,14 @@ func (wk *Worker) DebitWorker() {
 }
 
 func (wk *Worker) debitAccount(transferReq *handler.TransactionResponseData) bool {
-	_, err := wk.DB.DebitWallet(transferReq.Sender.Wallet.ID, transferReq.Amount)
+	_, err := wk.DB.Wallet().Debit(transferReq.Sender.Wallet.ID, transferReq.Amount)
 	if err != nil {
 		return false
 	}
 
 	// log operation
 	wk.Helper.BackgroundTask(nil, func() error {
-		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
+		_, err = wk.DB.Activity().Insert(&database.ActivityLog{
 			UserID:      transferReq.Sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
@@ -117,13 +117,13 @@ func (wk *Worker) debitAccount(transferReq *handler.TransactionResponseData) boo
 func (wk *Worker) processFailedDebit(transferReq *handler.TransactionResponseData) bool {
 	// When debit fails, we would mark the transaction status as failed
 
-	_, err := wk.DB.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusFailed)
+	_, err := wk.DB.Transaction().UpdateStatus(transferReq.ID, database.TransactionStatusFailed)
 	if err != nil {
 		log.Printf("Error marking transaction as failed: %v", err)
 		return false
 	}
 	// create an activity log to this effect
-	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
+	_, err = wk.DB.Activity().Insert(&database.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,

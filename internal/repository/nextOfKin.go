@@ -1,10 +1,12 @@
-package database
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type NextOfKin struct {
@@ -20,7 +22,21 @@ type NextOfKin struct {
 	DeletedAt    sql.NullTime `db:"deleted_at"`
 }
 
-func (db *DB) CreateNextOfKin(nextOfKin *NextOfKin) (string, error) {
+type NextOfKinRepository interface {
+	Insert(nextOfKin *NextOfKin) (string, error)
+	Update(id string, nextOfKin *NextOfKin) (bool, error)
+	FindOneByUserID(userID string) (*NextOfKin, bool, error)
+}
+
+type NextOfKinRepositoryImpl struct {
+	db *sqlx.DB
+}
+
+func NewNextOfKinRepository(db *sqlx.DB) NextOfKinRepository {
+	return &NextOfKinRepositoryImpl{db: db}
+}
+
+func (repo *NextOfKinRepositoryImpl) Insert(nextOfKin *NextOfKin) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -31,7 +47,7 @@ func (db *DB) CreateNextOfKin(nextOfKin *NextOfKin) (string, error) {
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id`
 
-	err := db.GetContext(ctx, &id, query,
+	err := repo.db.GetContext(ctx, &id, query,
 		nextOfKin.UserID,
 		nextOfKin.FirstName,
 		nextOfKin.LastName,
@@ -48,7 +64,7 @@ func (db *DB) CreateNextOfKin(nextOfKin *NextOfKin) (string, error) {
 	return id, nil
 }
 
-func (db *DB) UpdateNextOfKin(id string, nextOfKin *NextOfKin) (bool, error) {
+func (repo *NextOfKinRepositoryImpl) Update(id string, nextOfKin *NextOfKin) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -63,7 +79,7 @@ func (db *DB) UpdateNextOfKin(id string, nextOfKin *NextOfKin) (bool, error) {
 		WHERE id = $7
 		`
 
-	result, err := db.ExecContext(ctx, query,
+	result, err := repo.db.ExecContext(ctx, query,
 		nextOfKin.FirstName,
 		nextOfKin.LastName,
 		nextOfKin.PhoneNumber,
@@ -85,7 +101,7 @@ func (db *DB) UpdateNextOfKin(id string, nextOfKin *NextOfKin) (bool, error) {
 	return rowsAffected > 0, nil
 }
 
-func (db *DB) GetNextOfKinByUserID(userID string) (*NextOfKin, bool, error) {
+func (repo *NextOfKinRepositoryImpl) FindOneByUserID(userID string) (*NextOfKin, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -93,7 +109,7 @@ func (db *DB) GetNextOfKinByUserID(userID string) (*NextOfKin, bool, error) {
 
 	query := `SELECT id, first_name, last_name, email, address, phone_number, relationship, created_at 
 	FROM next_of_kins WHERE user_id=$1 LIMIT 1`
-	err := db.GetContext(ctx, &nextOfKin, query, userID)
+	err := repo.db.GetContext(ctx, &nextOfKin, query, userID)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil

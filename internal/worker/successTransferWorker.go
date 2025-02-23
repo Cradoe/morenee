@@ -9,8 +9,8 @@ import (
 	"log"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/handler"
+	database "github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/stream"
 )
 
@@ -57,14 +57,14 @@ func (wk *Worker) SuccessTransferWorker() {
 }
 
 func (wk *Worker) completeTransferOperation(transferReq *handler.TransactionResponseData) bool {
-	_, err := wk.DB.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusCompleted)
+	_, err := wk.DB.Transaction().UpdateStatus(transferReq.ID, database.TransactionStatusCompleted)
 	if err != nil {
 		log.Printf("Error updating transaction status: %v", err)
 		return false
 	}
 
 	wk.Helper.BackgroundTask(nil, func() error {
-		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
+		_, err = wk.DB.Activity().Insert(&database.ActivityLog{
 			UserID:      transferReq.Sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
@@ -83,25 +83,25 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.TransactionResp
 
 func (wk *Worker) sendTransactionAlerts(transferReq *handler.TransactionResponseData) bool {
 
-	sender, _, err := wk.DB.GetUser(transferReq.Sender.ID)
+	sender, _, err := wk.DB.User().GetOne(transferReq.Sender.ID)
 	if err != nil {
 		log.Printf("Error finding sender's account for debit alert: %v", err)
 		return false
 	}
 
-	recipient, _, err := wk.DB.GetUser(transferReq.Recipient.ID)
+	recipient, _, err := wk.DB.User().GetOne(transferReq.Recipient.ID)
 	if err != nil {
 		log.Printf("Error finding recipient's account for debit alert: %v", err)
 		return false
 	}
 
-	senderWallet, _, err := wk.DB.GetWallet(transferReq.Sender.Wallet.ID)
+	senderWallet, _, err := wk.DB.Wallet().GetOne(transferReq.Sender.Wallet.ID)
 	if err != nil {
 		log.Printf("Error finding sender's wallet for debit alert: %v", err)
 		return false
 	}
 
-	recipientWallet, _, err := wk.DB.GetWallet(transferReq.Recipient.Wallet.ID)
+	recipientWallet, _, err := wk.DB.Wallet().GetOne(transferReq.Recipient.Wallet.ID)
 	if err != nil {
 		log.Printf("Error finding sender's wallet for debit alert: %v", err)
 		return false

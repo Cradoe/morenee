@@ -41,7 +41,7 @@ func (h *RouteHandler) HandleSaveUserBVN(w http.ResponseWriter, r *http.Request)
 
 	user := context.ContextGetAuthenticatedUser((r))
 
-	requirement, found, err := h.DB.FindKYCRequirementByName("BVN")
+	requirement, found, err := h.DB.KycRequirement().FindByName("BVN")
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -53,7 +53,7 @@ func (h *RouteHandler) HandleSaveUserBVN(w http.ResponseWriter, r *http.Request)
 	}
 
 	// check that record has not been set
-	_, found, err = h.DB.GetUserKYCDataByRequirement(user.ID, requirement.ID)
+	_, found, err = h.DB.UserKycData().GetByRequirementId(user.ID, requirement.ID)
 	if found {
 		message := "Data has already been set"
 		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
@@ -63,7 +63,7 @@ func (h *RouteHandler) HandleSaveUserBVN(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = h.DB.SaveKYCData(user.ID, input.BVN, requirement.ID)
+	err = h.DB.UserKycData().Insert(user.ID, input.BVN, requirement.ID)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -71,7 +71,7 @@ func (h *RouteHandler) HandleSaveUserBVN(w http.ResponseWriter, r *http.Request)
 
 	// make attempt to upgrade user kyc level in background
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.UpgradeUserKYCLevel(user.ID)
+		_, err = h.DB.UserKycData().UpgradeLevel(user.ID)
 
 		if err != nil {
 			log.Printf("Error upgrading user kyc: %v", err)
@@ -92,7 +92,7 @@ func (h *RouteHandler) HandleGetAllUserKYCData(w http.ResponseWriter, r *http.Re
 
 	user := context.ContextGetAuthenticatedUser((r))
 
-	kycDataList, err := h.DB.GetUserKYCData(user.ID)
+	kycDataList, err := h.DB.UserKycData().GetAll(user.ID)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -144,7 +144,7 @@ func (h *RouteHandler) HandleSaveKYCData(w http.ResponseWriter, r *http.Request)
 	user := context.ContextGetAuthenticatedUser((r))
 
 	// check that record has not been set
-	_, found, err := h.DB.GetUserKYCDataByRequirement(user.ID, input.RequirementID)
+	_, found, err := h.DB.UserKycData().GetByRequirementId(user.ID, input.RequirementID)
 	if found {
 		message := "Data has already been set"
 		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
@@ -154,7 +154,7 @@ func (h *RouteHandler) HandleSaveKYCData(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = h.DB.SaveKYCData(user.ID, input.Value, input.RequirementID)
+	err = h.DB.UserKycData().Insert(user.ID, input.Value, input.RequirementID)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -162,7 +162,7 @@ func (h *RouteHandler) HandleSaveKYCData(w http.ResponseWriter, r *http.Request)
 
 	// make attempt to upgrade user kyc level in background
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.UpgradeUserKYCLevel(user.ID)
+		_, err = h.DB.UserKycData().UpgradeLevel(user.ID)
 
 		if err != nil {
 			log.Printf("Error upgrading user kyc: %v", err)

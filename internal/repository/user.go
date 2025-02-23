@@ -1,11 +1,25 @@
-package database
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
+
+type UserRepository interface {
+	CheckIfPhoneNumberExist(phoneNumber string) (bool, error)
+	Insert(user *User, tx *sqlx.Tx) (string, error)
+	GetOne(id string) (*User, bool, error)
+	GetByEmail(email string) (*User, bool, error)
+	Verify(id string, tx *sqlx.Tx) error
+	UpdatePassword(id, password string) error
+	ChangePin(id string, pin string) error
+	ChangeProfilePicture(id string, image string) error
+	Lock(id string) error
+}
 
 type User struct {
 	ID             string         `db:"id"`
@@ -41,7 +55,15 @@ const (
 	UserAccountLockedStatus = "locked"
 )
 
-func (db *DB) InsertUser(user *User, tx *sql.Tx) (string, error) {
+type UserRepositoryImpl struct {
+	db *sqlx.DB
+}
+
+func NewUserRepository(db *sqlx.DB) UserRepository {
+	return &UserRepositoryImpl{db: db}
+}
+
+func (repo *UserRepositoryImpl) Insert(user *User, tx *sqlx.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -64,7 +86,7 @@ func (db *DB) InsertUser(user *User, tx *sql.Tx) (string, error) {
 			return "", err
 		}
 	} else {
-		err := db.GetContext(ctx, &id, query,
+		err := repo.db.GetContext(ctx, &id, query,
 			user.FirstName,
 			user.LastName,
 			user.PhoneNumber,
@@ -80,7 +102,7 @@ func (db *DB) InsertUser(user *User, tx *sql.Tx) (string, error) {
 	return id, nil
 }
 
-func (db *DB) VerifyUserAccount(id string, tx *sql.Tx) error {
+func (repo *UserRepositoryImpl) Verify(id string, tx *sqlx.Tx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -96,7 +118,7 @@ func (db *DB) VerifyUserAccount(id string, tx *sql.Tx) error {
 			return err
 		}
 	} else {
-		_, err := db.ExecContext(ctx, query, UserAccountActiveStatus, time.Now(), id)
+		_, err := repo.db.ExecContext(ctx, query, UserAccountActiveStatus, time.Now(), id)
 		if err != nil {
 			return err
 		}
@@ -105,13 +127,13 @@ func (db *DB) VerifyUserAccount(id string, tx *sql.Tx) error {
 	return nil
 }
 
-func (db *DB) UpdateUserPassword(id, password string) error {
+func (repo *UserRepositoryImpl) UpdatePassword(id, password string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `UPDATE users SET hashed_password = $1 WHERE id = $2`
 
-	_, err := db.ExecContext(ctx, query, password, id)
+	_, err := repo.db.ExecContext(ctx, query, password, id)
 	if err != nil {
 		return err
 	}
@@ -119,7 +141,7 @@ func (db *DB) UpdateUserPassword(id, password string) error {
 	return nil
 }
 
-func (db *DB) GetUser(id string) (*User, bool, error) {
+func (repo *UserRepositoryImpl) GetOne(id string) (*User, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -127,7 +149,7 @@ func (db *DB) GetUser(id string) (*User, bool, error) {
 
 	query := `SELECT * FROM users WHERE id = $1`
 
-	err := db.GetContext(ctx, &user, query, id)
+	err := repo.db.GetContext(ctx, &user, query, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}
@@ -135,7 +157,7 @@ func (db *DB) GetUser(id string) (*User, bool, error) {
 	return &user, true, err
 }
 
-func (db *DB) GetUserByEmail(email string) (*User, bool, error) {
+func (repo *UserRepositoryImpl) GetByEmail(email string) (*User, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -143,14 +165,14 @@ func (db *DB) GetUserByEmail(email string) (*User, bool, error) {
 
 	query := `SELECT * FROM users WHERE email = $1`
 
-	err := db.GetContext(ctx, &user, query, email)
+	err := repo.db.GetContext(ctx, &user, query, email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}
 
 	return &user, true, err
 }
-func (db *DB) CheckIfPhoneNumberExist(phone_number string) (bool, error) {
+func (repo *UserRepositoryImpl) CheckIfPhoneNumberExist(phoneNumber string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -158,7 +180,7 @@ func (db *DB) CheckIfPhoneNumberExist(phone_number string) (bool, error) {
 
 	query := `SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1)`
 
-	err := db.GetContext(ctx, &exists, query, phone_number)
+	err := repo.db.GetContext(ctx, &exists, query, phoneNumber)
 	if err != nil {
 		return false, err
 	}
@@ -166,42 +188,32 @@ func (db *DB) CheckIfPhoneNumberExist(phone_number string) (bool, error) {
 	return exists, nil
 }
 
-func (db *DB) UpdateUserHashedPassword(id string, hashedPassword string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
-	query := `UPDATE users SET hashed_password = $1 WHERE id = $2`
-
-	_, err := db.ExecContext(ctx, query, hashedPassword, id)
-	return err
-}
-
-func (db *DB) ChangeAccountPin(id string, pin string) error {
+func (repo *UserRepositoryImpl) ChangePin(id string, pin string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `UPDATE users SET pin = $1 WHERE id = $2`
 
-	_, err := db.ExecContext(ctx, query, pin, id)
+	_, err := repo.db.ExecContext(ctx, query, pin, id)
 	return err
 }
 
-func (db *DB) ChangeProfilePicture(id string, image string) error {
+func (repo *UserRepositoryImpl) ChangeProfilePicture(id string, image string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `UPDATE users SET image = $1 WHERE id = $2`
 
-	_, err := db.ExecContext(ctx, query, image, id)
+	_, err := repo.db.ExecContext(ctx, query, image, id)
 	return err
 }
 
-func (db *DB) UserLockAccount(id string) error {
+func (repo *UserRepositoryImpl) Lock(id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `UPDATE users SET status = $1 WHERE id = $2`
 
-	_, err := db.ExecContext(ctx, query, UserAccountLockedStatus, id)
+	_, err := repo.db.ExecContext(ctx, query, UserAccountLockedStatus, id)
 	return err
 }

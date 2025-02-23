@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/handler"
+	database "github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/stream"
 )
 
@@ -92,7 +92,7 @@ func (wk *Worker) CreditWorker() {
 }
 
 func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bool {
-	_, err := wk.DB.CreditWallet(transferReq.Recipient.Wallet.ID, transferReq.Amount)
+	_, err := wk.DB.Wallet().Credit(transferReq.Recipient.Wallet.ID, transferReq.Amount)
 	if err != nil {
 		log.Printf("Error crediting wallet: %v", err)
 		return false
@@ -100,7 +100,7 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 
 	// log operation
 	wk.Helper.BackgroundTask(nil, func() error {
-		_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
+		_, err = wk.DB.Activity().Insert(&database.ActivityLog{
 			UserID:      transferReq.Recipient.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
@@ -118,7 +118,7 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 	// check and lock account if balance has exceeded balance limit
 	wk.Helper.BackgroundTask(nil, func() error {
 		// Step 1: Get the recipient wallet
-		wallet, found, err := wk.DB.GetWallet(transferReq.Recipient.Wallet.ID)
+		wallet, found, err := wk.DB.Wallet().GetOne(transferReq.Recipient.Wallet.ID)
 		if err != nil {
 			log.Printf("Error getting wallet: %v", err)
 			return err
@@ -128,7 +128,7 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 		}
 
 		// Step 2: Get the recipient's KYC level
-		recipient, found, err := wk.DB.GetUser(transferReq.Recipient.ID)
+		recipient, found, err := wk.DB.User().GetOne(transferReq.Recipient.ID)
 		if err != nil {
 			log.Printf("Error getting recipient user: %v", err)
 			return err
@@ -141,7 +141,7 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 
 		if !recipient.KYCLevelID.Valid {
 			// user is still in tier 0
-			err := wk.DB.LockWallet(transferReq.Recipient.Wallet.ID)
+			err := wk.DB.Wallet().Lock(transferReq.Recipient.Wallet.ID)
 			if err != nil {
 				return errors.New("error locking recipient account due to missing KYC level 1")
 			}
@@ -149,14 +149,14 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 			return nil
 		}
 		kycLevelIDStr := fmt.Sprintf("%d", recipient.KYCLevelID.Int16)
-		recipientKYCLevel, _, err := wk.DB.GetKYC(kycLevelIDStr)
+		recipientKYCLevel, _, err := wk.DB.KYC().GetOne(kycLevelIDStr)
 		if err != nil {
 			return errors.New("could not get user kyc")
 		}
 
 		// Step 4: Check balance limit and lock wallet if exceeded
 		if wallet.Balance > recipientKYCLevel.WalletBalanceLimit {
-			err = wk.DB.LockWallet(transferReq.Recipient.Wallet.ID)
+			err = wk.DB.Wallet().Lock(transferReq.Recipient.Wallet.ID)
 			if err != nil {
 				log.Printf("Error locking recipient account over max balance limit: %v", err)
 				return err
@@ -180,7 +180,7 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 // 6. Logs the new reversal transaction to document the entire process.
 func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseData) bool {
 	// Log the failed credit attempt synchronously
-	_, err := wk.DB.CreateActivityLog(&database.ActivityLog{
+	_, err := wk.DB.Activity().Insert(&database.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
@@ -191,14 +191,14 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 	}
 
 	// Reverse the money to the sender
-	_, err = wk.DB.CreditWallet(transferReq.Sender.Wallet.ID, transferReq.Amount)
+	_, err = wk.DB.Wallet().Credit(transferReq.Sender.Wallet.ID, transferReq.Amount)
 	if err != nil {
 		log.Printf("Error reversing money from failed credit: %v", err)
 		return false
 	}
 
 	// Log the successful credit reversal
-	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
+	_, err = wk.DB.Activity().Insert(&database.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
@@ -209,7 +209,7 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 	}
 
 	// Mark the original transaction as reversed
-	_, err = wk.DB.UpdateTransactionStatus(transferReq.ID, database.TransactionStatusReversed)
+	_, err = wk.DB.Transaction().UpdateStatus(transferReq.ID, database.TransactionStatusReversed)
 	if err != nil {
 		log.Printf("Error marking transaction as reversed: %v", err)
 		return false
@@ -224,14 +224,14 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 		ReferenceNumber:   transferReq.ReferenceNumber,
 		Description:       sql.NullString{String: desc, Valid: true},
 	}
-	transactionID, err := wk.DB.CreateTransaction(newTrans, nil)
+	transactionID, err := wk.DB.Transaction().Insert(newTrans, nil)
 	if err != nil {
 		log.Printf("Error creating reversal transaction: %v", err)
 		return false
 	}
 
 	// Log the reversal transaction
-	_, err = wk.DB.CreateActivityLog(&database.ActivityLog{
+	_, err = wk.DB.Activity().Insert(&database.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      database.ActivityLogTransactionEntity,
 		EntityId:    transactionID,

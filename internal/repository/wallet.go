@@ -1,10 +1,12 @@
-package database
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type Wallet struct {
@@ -24,7 +26,26 @@ const (
 	WalletOnHoldStatus = "on-hold"
 )
 
-func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
+type WalletRepository interface {
+	Insert(wallet *Wallet, tx *sqlx.Tx) (string, error)
+	Balance(id string) (*Wallet, error)
+	GetAllByUserId(userID string) ([]Wallet, bool, error)
+	GetOne(id string) (*Wallet, bool, error)
+	FindByAccountNumber(account_number string) (*Wallet, bool, error)
+	Debit(walletID string, amount float64) (bool, error)
+	Credit(walletID string, amount float64) (bool, error)
+	Lock(id string) error
+}
+
+type WalletRepositoryImpl struct {
+	db *sqlx.DB
+}
+
+func NewWalletRepository(db *sqlx.DB) WalletRepository {
+	return &WalletRepositoryImpl{db: db}
+}
+
+func (repo *WalletRepositoryImpl) Insert(wallet *Wallet, tx *sqlx.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -43,7 +64,7 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 			return "", err
 		}
 	} else {
-		err := db.GetContext(ctx, &id, query,
+		err := repo.db.GetContext(ctx, &id, query,
 			wallet.UserID,
 			wallet.AccountNumber,
 		)
@@ -56,7 +77,7 @@ func (db *DB) CreateWallet(wallet *Wallet, tx *sql.Tx) (string, error) {
 	return id, nil
 }
 
-func (db *DB) GetWalletBalance(id string) (*Wallet, error) {
+func (repo *WalletRepositoryImpl) Balance(id string) (*Wallet, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -65,7 +86,7 @@ func (db *DB) GetWalletBalance(id string) (*Wallet, error) {
 	query := `
         SELECT user_id, balance, currency FROM wallets WHERE id=$1 AND deleted_at IS NULL`
 
-	err := db.GetContext(ctx, &wallet, query, id)
+	err := repo.db.GetContext(ctx, &wallet, query, id)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -77,7 +98,7 @@ func (db *DB) GetWalletBalance(id string) (*Wallet, error) {
 	return &wallet, nil
 }
 
-func (db *DB) GetWalletsByUserId(userID string) ([]Wallet, bool, error) {
+func (repo *WalletRepositoryImpl) GetAllByUserId(userID string) ([]Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -86,7 +107,7 @@ func (db *DB) GetWalletsByUserId(userID string) ([]Wallet, bool, error) {
 	query := `
         SELECT id, balance, currency, account_number, status, created_at FROM wallets WHERE user_id=$1 AND deleted_at IS NULL`
 
-	err := db.SelectContext(ctx, &wallets, query, userID)
+	err := repo.db.SelectContext(ctx, &wallets, query, userID)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -98,7 +119,7 @@ func (db *DB) GetWalletsByUserId(userID string) ([]Wallet, bool, error) {
 	return wallets, true, nil
 }
 
-func (db *DB) GetWallet(id string) (*Wallet, bool, error) {
+func (repo *WalletRepositoryImpl) GetOne(id string) (*Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -107,7 +128,7 @@ func (db *DB) GetWallet(id string) (*Wallet, bool, error) {
 	query := `
         SELECT id, user_id, balance, currency, account_number, status, created_at FROM wallets WHERE id=$1 AND deleted_at IS NULL`
 
-	err := db.GetContext(ctx, &wallet, query, id)
+	err := repo.db.GetContext(ctx, &wallet, query, id)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -119,7 +140,7 @@ func (db *DB) GetWallet(id string) (*Wallet, bool, error) {
 	return &wallet, true, nil
 }
 
-func (db *DB) FindWalletByAccountNumber(account_number string) (*Wallet, bool, error) {
+func (repo *WalletRepositoryImpl) FindByAccountNumber(account_number string) (*Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -128,7 +149,7 @@ func (db *DB) FindWalletByAccountNumber(account_number string) (*Wallet, bool, e
 	query := `
         SELECT id, user_id, balance, currency, account_number, status, created_at FROM wallets WHERE account_number=$1 AND deleted_at IS NULL`
 
-	err := db.GetContext(ctx, &wallet, query, account_number)
+	err := repo.db.GetContext(ctx, &wallet, query, account_number)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -140,7 +161,7 @@ func (db *DB) FindWalletByAccountNumber(account_number string) (*Wallet, bool, e
 	return &wallet, true, nil
 }
 
-func (db *DB) DebitWallet(walletID string, amount float64) (bool, error) {
+func (repo *WalletRepositoryImpl) Debit(walletID string, amount float64) (bool, error) {
 	// we need to first check if the wallet has enough balance to process the transaction
 	// if not, we return an error
 	// if the wallet has enough balance, we proceed to debit the wallet
@@ -149,7 +170,7 @@ func (db *DB) DebitWallet(walletID string, amount float64) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	tx, err := db.BeginTxx(ctx, nil)
+	tx, err := repo.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return false, err
 	}
@@ -189,13 +210,13 @@ func (db *DB) DebitWallet(walletID string, amount float64) (bool, error) {
 
 }
 
-func (db *DB) CreditWallet(walletID string, amount float64) (bool, error) {
+func (repo *WalletRepositoryImpl) Credit(walletID string, amount float64) (bool, error) {
 	// we'll use pessimistic lock to lock the account for the duration of the operation
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	tx, err := db.BeginTxx(ctx, nil)
+	tx, err := repo.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return false, err
 	}
@@ -231,12 +252,12 @@ func (db *DB) CreditWallet(walletID string, amount float64) (bool, error) {
 
 }
 
-func (db *DB) LockWallet(id string) error {
+func (repo *WalletRepositoryImpl) Lock(id string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	query := `UPDATE wallets SET status = $1 WHERE id = $2`
 
-	_, err := db.ExecContext(ctx, query, WalletOnHoldStatus, id)
+	_, err := repo.db.ExecContext(ctx, query, WalletOnHoldStatus, id)
 	return err
 }

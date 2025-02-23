@@ -8,7 +8,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cradoe/morenee/internal/database"
+	database "github.com/cradoe/morenee/internal/repository"
 )
 
 type contextKey string

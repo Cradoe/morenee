@@ -9,8 +9,8 @@ import (
 
 	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/context"
-	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/errHandler"
+	database "github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/response"
 
 	"github.com/pascaldekloe/jwt"
@@ -20,11 +20,11 @@ import (
 type Middleware struct {
 	errHandler *errHandler.ErrorRepository
 	logger     *slog.Logger
-	DB         *database.DB
+	DB         database.Database
 	config     *config.Config
 }
 
-func New(errHandler *errHandler.ErrorRepository, logger *slog.Logger, db *database.DB, config *config.Config) *Middleware {
+func New(errHandler *errHandler.ErrorRepository, logger *slog.Logger, db database.Database, config *config.Config) *Middleware {
 	return &Middleware{
 		errHandler: errHandler,
 		logger:     logger,
@@ -101,7 +101,7 @@ func (mid *Middleware) Authenticate(next http.Handler) http.HandlerFunc {
 
 				userID := claims.Subject
 
-				user, found, err := mid.DB.GetUser(userID)
+				user, found, err := mid.DB.User().GetOne(userID)
 				if err != nil {
 					mid.errHandler.ServerError(w, r, err)
 					return

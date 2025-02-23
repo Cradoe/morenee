@@ -22,7 +22,7 @@ type KYCRequirementResponseData struct {
 
 func (h *RouteHandler) HandleKYCs(w http.ResponseWriter, r *http.Request) {
 
-	KYCS, err := h.DB.GetKYCS()
+	KYCS, err := h.DB.KYC().GetAll()
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -68,7 +68,7 @@ func (h *RouteHandler) HandleKYCs(w http.ResponseWriter, r *http.Request) {
 func (h *RouteHandler) HandleSingleYC(w http.ResponseWriter, r *http.Request) {
 	kycID := r.PathValue("id")
 
-	result, found, err := h.DB.GetKYC(kycID)
+	result, found, err := h.DB.KYC().GetOne(kycID)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return

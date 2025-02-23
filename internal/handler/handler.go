@@ -7,16 +7,16 @@ import (
 
 	"github.com/cradoe/morenee/internal/cache"
 	"github.com/cradoe/morenee/internal/config"
-	"github.com/cradoe/morenee/internal/database"
 	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/file"
 	"github.com/cradoe/morenee/internal/helper"
+	database "github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/smtp"
 	"github.com/cradoe/morenee/internal/stream"
 )
 
 type RouteHandler struct {
-	DB           *database.DB
+	DB           database.Database
 	Config       *config.Config
 	ErrHandler   *errHandler.ErrorRepository
 	Mailer       *smtp.Mailer

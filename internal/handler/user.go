@@ -9,7 +9,7 @@ import (
 
 	"github.com/cradoe/gopass"
 	"github.com/cradoe/morenee/internal/context"
-	"github.com/cradoe/morenee/internal/database"
+	database "github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
 	"github.com/cradoe/morenee/internal/validator"
@@ -93,7 +93,7 @@ func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = h.DB.ChangeAccountPin(user.ID, input.Pin)
+	err = h.DB.User().ChangePin(user.ID, input.Pin)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -114,7 +114,7 @@ func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Reques
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
+		_, err = h.DB.Activity().Insert(&database.ActivityLog{
 			UserID:      user.ID,
 			Entity:      database.ActivityLogUserEntity,
 			EntityId:    user.ID,
@@ -167,7 +167,7 @@ func (h *RouteHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request)
 	if user.KYCLevelID.Valid {
 		kycLevelIDStr = fmt.Sprintf("%d", user.KYCLevelID.Int16)
 
-		kycLevel, kycLevelExists, err := h.DB.GetKYC(kycLevelIDStr)
+		kycLevel, kycLevelExists, err := h.DB.KYC().GetOne(kycLevelIDStr)
 		if err != nil {
 			h.ErrHandler.ServerError(w, r, err)
 		}
@@ -209,7 +209,7 @@ func (h *RouteHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http
 		return
 	}
 
-	err = h.DB.ChangeProfilePicture(user.ID, input.ImageUrl)
+	err = h.DB.User().ChangeProfilePicture(user.ID, input.ImageUrl)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -229,7 +229,7 @@ func (h *RouteHandler) HandleGetNextOfKin(w http.ResponseWriter, r *http.Request
 
 	user := context.ContextGetAuthenticatedUser((r))
 
-	nextOfKin, found, err := h.DB.GetNextOfKinByUserID(user.ID)
+	nextOfKin, found, err := h.DB.NextOfKin().FindOneByUserID(user.ID)
 
 	if !found {
 		h.ErrHandler.NotFound(w, r)
@@ -294,11 +294,11 @@ func (h *RouteHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request
 	user := context.ContextGetAuthenticatedUser((r))
 
 	// check if user has previously added Next of kin
-	existingRecord, found, _ := h.DB.GetNextOfKinByUserID(user.ID)
+	existingRecord, found, _ := h.DB.NextOfKin().FindOneByUserID(user.ID)
 
 	// if yes, then update the existing one
 	if found {
-		_, err = h.DB.UpdateNextOfKin(existingRecord.ID, &database.NextOfKin{
+		_, err = h.DB.NextOfKin().Update(existingRecord.ID, &database.NextOfKin{
 			FirstName:    input.FirstName,
 			LastName:     input.LastName,
 			Email:        input.Email,
@@ -309,7 +309,7 @@ func (h *RouteHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request
 
 	} else {
 		// create a new record
-		_, err = h.DB.CreateNextOfKin(&database.NextOfKin{
+		_, err = h.DB.NextOfKin().Insert(&database.NextOfKin{
 			FirstName:    input.FirstName,
 			LastName:     input.LastName,
 			Email:        input.Email,

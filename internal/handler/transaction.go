@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/cradoe/morenee/internal/context"
-	"github.com/cradoe/morenee/internal/database"
+	database "github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
 	"github.com/cradoe/morenee/internal/validator"
@@ -197,7 +197,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	errCh := make(chan error, 2)
 
 	go func() {
-		recipientWallet, found, err := h.DB.FindWalletByAccountNumber(input.AccountNumber)
+		recipientWallet, found, err := h.DB.Wallet().FindByAccountNumber(input.AccountNumber)
 
 		if !found {
 			errCh <- fmt.Errorf("recipient_not_found")
@@ -215,7 +215,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	}()
 
 	go func() {
-		senderWallet, found, err := h.DB.GetWallet(input.SenderWalletID)
+		senderWallet, found, err := h.DB.Wallet().GetOne(input.SenderWalletID)
 		if !found {
 			errCh <- fmt.Errorf("wallet_not_found")
 			return
@@ -301,7 +301,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 
 	kycLevelIDStr = fmt.Sprintf("%d", sender.KYCLevelID.Int16)
 
-	level, kycLevelExists, err := h.DB.GetKYC(kycLevelIDStr)
+	level, kycLevelExists, err := h.DB.KYC().GetOne(kycLevelIDStr)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 	}
@@ -319,7 +319,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Check for daily limit
-	if exceeded, err := h.DB.HasExceededDailyLimit(senderWallet.ID, input.Amount, senderKycLevel.DailyTransferLimit); err != nil {
+	if exceeded, err := h.DB.Transaction().HasExceededDailyLimit(senderWallet.ID, input.Amount, senderKycLevel.DailyTransferLimit); err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	} else if exceeded {
@@ -340,13 +340,13 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 		ReferenceNumber:   generateTransactionRef(),
 		Description:       sql.NullString{String: input.Description, Valid: input.Description != ""},
 	}
-	transactionId, err := h.DB.CreateTransaction(newTrans, nil)
+	transactionId, err := h.DB.Transaction().Insert(newTrans, nil)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	transactionData, found, err := h.DB.GetTransaction(transactionId)
+	transactionData, found, err := h.DB.Transaction().GetOne(transactionId)
 	if !found {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -381,7 +381,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.CreateActivityLog(&database.ActivityLog{
+		_, err = h.DB.Activity().Insert(&database.ActivityLog{
 			UserID:      transferRes.Sender.ID,
 			Entity:      database.ActivityLogTransactionEntity,
 			EntityId:    transferRes.ID,
@@ -408,7 +408,7 @@ func (h *RouteHandler) HandleWalletTransactions(w http.ResponseWriter, r *http.R
 
 	var filterOptions = h.retrieveQueryValues(r)
 
-	transactions, found, err := h.DB.GetTransactionsByWalletId(walletId, &database.FilterTransactionsOptions{
+	transactions, found, err := h.DB.Transaction().FindAllByWalletId(walletId, &database.FilterTransactionsOptions{
 		StartDate:   filterOptions.StartDate,
 		EndDate:     filterOptions.EndDate,
 		SearchQuery: filterOptions.Search,
@@ -444,7 +444,7 @@ func (h *RouteHandler) HandleWalletTransactions(w http.ResponseWriter, r *http.R
 func (h *RouteHandler) HandleTransactionDetails(w http.ResponseWriter, r *http.Request) {
 	transactionId := r.PathValue("id")
 
-	transaction, found, err := h.DB.GetTransaction(transactionId)
+	transaction, found, err := h.DB.Transaction().GetOne(transactionId)
 	if !found {
 		h.ErrHandler.NotFound(w, r)
 		return
