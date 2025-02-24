@@ -28,7 +28,7 @@ type AuthHandler struct {
 	Config       *config.Config
 	ErrHandler   *errHandler.ErrorHandler
 	Mailer       smtp.MailerInterface
-	Helper       *helper.HelperRepository
+	Helper       *helper.Helper
 	Cache        *cache.Cache
 }
 

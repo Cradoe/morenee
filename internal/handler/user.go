@@ -70,7 +70,7 @@ type UserHandler struct {
 	NextOfKinRepo repository.NextOfKinRepository
 	ErrHandler    *errHandler.ErrorHandler
 	Mailer        *smtp.Mailer
-	Helper        *helper.HelperRepository
+	Helper        *helper.Helper
 }
 
 func NewUserHandler(handler *UserHandler) *UserHandler {

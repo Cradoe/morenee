@@ -89,7 +89,7 @@ type TransactionHandler struct {
 
 	ErrHandler *errHandler.ErrorHandler
 	Cache      *cache.Cache
-	Helper     *helper.HelperRepository
+	Helper     *helper.Helper
 	Kafka      *stream.KafkaStream
 }
 

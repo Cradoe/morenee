@@ -8,21 +8,21 @@ import (
 	"github.com/cradoe/morenee/internal/errHandler"
 )
 
-type HelperRepository struct {
+type Helper struct {
 	baseUrl    *string
 	WG         *sync.WaitGroup
 	errHandler *errHandler.ErrorHandler
 }
 
-func New(baseUrl *string, wg *sync.WaitGroup, errHandler *errHandler.ErrorHandler) *HelperRepository {
-	return &HelperRepository{
+func New(baseUrl *string, wg *sync.WaitGroup, errHandler *errHandler.ErrorHandler) *Helper {
+	return &Helper{
 		baseUrl:    baseUrl,
 		WG:         wg,
 		errHandler: errHandler,
 	}
 }
 
-func (h *HelperRepository) NewEmailData() map[string]any {
+func (h *Helper) NewEmailData() map[string]any {
 	data := map[string]any{
 		"BaseURL": h.baseUrl,
 	}
@@ -30,7 +30,7 @@ func (h *HelperRepository) NewEmailData() map[string]any {
 	return data
 }
 
-func (h *HelperRepository) BackgroundTask(r *http.Request, fn func() error) {
+func (h *Helper) BackgroundTask(r *http.Request, fn func() error) {
 	// h.WG.Add(1)
 
 	go func() {

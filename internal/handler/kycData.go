@@ -27,7 +27,7 @@ type UserKycDataHandler struct {
 	KycRequirementRepo repository.KycRequirementRepository
 
 	ErrHandler *errHandler.ErrorHandler
-	Helper     *helper.HelperRepository
+	Helper     *helper.Helper
 }
 
 func NewUserKycDataHandler(handler *UserKycDataHandler) *UserKycDataHandler {

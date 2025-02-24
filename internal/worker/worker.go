@@ -18,7 +18,7 @@ type Worker struct {
 
 	KafkaStream *stream.KafkaStream
 	Ctx         context.Context
-	Helper      *helper.HelperRepository
+	Helper      *helper.Helper
 	Mailer      *smtp.Mailer
 }
 
