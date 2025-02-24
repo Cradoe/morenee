@@ -26,7 +26,7 @@ type AuthHandler struct {
 	ActivityRepo repository.ActivityRepository
 	WalletRepo   repository.WalletRepository
 	Config       *config.Config
-	ErrHandler   *errHandler.ErrorRepository
+	ErrHandler   *errHandler.ErrorHandler
 	Mailer       smtp.MailerInterface
 	Helper       *helper.HelperRepository
 	Cache        *cache.Cache

@@ -25,7 +25,7 @@ type KYCRequirementResponseData struct {
 type KycHandler struct {
 	KycRepo repository.KycRepository
 
-	ErrHandler *errHandler.ErrorRepository
+	ErrHandler *errHandler.ErrorHandler
 }
 
 func NewKycHandler(handler *KycHandler) *KycHandler {

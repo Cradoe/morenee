@@ -11,10 +11,10 @@ import (
 type HelperRepository struct {
 	baseUrl    *string
 	WG         *sync.WaitGroup
-	errHandler *errHandler.ErrorRepository
+	errHandler *errHandler.ErrorHandler
 }
 
-func New(baseUrl *string, wg *sync.WaitGroup, errHandler *errHandler.ErrorRepository) *HelperRepository {
+func New(baseUrl *string, wg *sync.WaitGroup, errHandler *errHandler.ErrorHandler) *HelperRepository {
 	return &HelperRepository{
 		baseUrl:    baseUrl,
 		WG:         wg,

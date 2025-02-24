@@ -12,21 +12,21 @@ import (
 	"github.com/cradoe/morenee/internal/smtp"
 )
 
-type ErrorRepository struct {
+type ErrorHandler struct {
 	notificationEmail string
 	logger            *slog.Logger
 	mailer            *smtp.Mailer
 }
 
-func New(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger) *ErrorRepository {
-	return &ErrorRepository{
+func New(notificationEmail string, mailer *smtp.Mailer, logger *slog.Logger) *ErrorHandler {
+	return &ErrorHandler{
 		notificationEmail: notificationEmail,
 		logger:            logger,
 		mailer:            mailer,
 	}
 }
 
-func (e *ErrorRepository) ReportServerError(r *http.Request, err error) {
+func (e *ErrorHandler) ReportServerError(r *http.Request, err error) {
 	var (
 		message = err.Error()
 		method  string
@@ -72,7 +72,7 @@ type Error struct {
 	headers http.Header
 }
 
-func (e *ErrorRepository) ErrorMessage(d *Error) {
+func (e *ErrorHandler) ErrorMessage(d *Error) {
 	d.message = strings.ToUpper(d.message[:1]) + d.message[1:]
 
 	err := response.JSONErrorResponse(d.w, d.errors, d.message, d.status, d.headers)
@@ -82,7 +82,7 @@ func (e *ErrorRepository) ErrorMessage(d *Error) {
 	}
 }
 
-func (e *ErrorRepository) ServerError(w http.ResponseWriter, r *http.Request, err error) {
+func (e *ErrorHandler) ServerError(w http.ResponseWriter, r *http.Request, err error) {
 	e.ReportServerError(r, err)
 
 	message := "The server encountered a problem and could not process your request"
@@ -95,7 +95,7 @@ func (e *ErrorRepository) ServerError(w http.ResponseWriter, r *http.Request, er
 	})
 }
 
-func (e *ErrorRepository) NotFound(w http.ResponseWriter, r *http.Request) {
+func (e *ErrorHandler) NotFound(w http.ResponseWriter, r *http.Request) {
 	message := "The requested resource could not be found"
 	e.ErrorMessage(&Error{
 		w:       w,
@@ -106,7 +106,7 @@ func (e *ErrorRepository) NotFound(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (e *ErrorRepository) MethodNotAllowed(w http.ResponseWriter, r *http.Request) {
+func (e *ErrorHandler) MethodNotAllowed(w http.ResponseWriter, r *http.Request) {
 	message := fmt.Sprintf("The %s method is not supported for this resource", r.Method)
 	e.ErrorMessage(&Error{
 		w:       w,
@@ -117,7 +117,7 @@ func (e *ErrorRepository) MethodNotAllowed(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (e *ErrorRepository) BadRequest(w http.ResponseWriter, r *http.Request, err error) {
+func (e *ErrorHandler) BadRequest(w http.ResponseWriter, r *http.Request, err error) {
 
 	e.ErrorMessage(&Error{
 		w:       w,
@@ -128,7 +128,7 @@ func (e *ErrorRepository) BadRequest(w http.ResponseWriter, r *http.Request, err
 	})
 }
 
-func (e *ErrorRepository) FailedValidation(w http.ResponseWriter, r *http.Request, v any) {
+func (e *ErrorHandler) FailedValidation(w http.ResponseWriter, r *http.Request, v any) {
 	message := "Validation failed"
 
 	e.ErrorMessage(&Error{
@@ -141,7 +141,7 @@ func (e *ErrorRepository) FailedValidation(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (e *ErrorRepository) InvalidAuthenticationToken(w http.ResponseWriter, r *http.Request) {
+func (e *ErrorHandler) InvalidAuthenticationToken(w http.ResponseWriter, r *http.Request) {
 	headers := make(http.Header)
 	headers.Set("WWW-Authenticate", "Bearer")
 
@@ -154,7 +154,7 @@ func (e *ErrorRepository) InvalidAuthenticationToken(w http.ResponseWriter, r *h
 	})
 }
 
-func (e *ErrorRepository) AuthenticationRequired(w http.ResponseWriter, r *http.Request) {
+func (e *ErrorHandler) AuthenticationRequired(w http.ResponseWriter, r *http.Request) {
 	message := "You must be authenticated to access this resource"
 	e.ErrorMessage(&Error{
 		w:       w,

@@ -68,7 +68,7 @@ type UserHandler struct {
 	ActivityRepo  repository.ActivityRepository
 	KycRepo       repository.KycRepository
 	NextOfKinRepo repository.NextOfKinRepository
-	ErrHandler    *errHandler.ErrorRepository
+	ErrHandler    *errHandler.ErrorHandler
 	Mailer        *smtp.Mailer
 	Helper        *helper.HelperRepository
 }

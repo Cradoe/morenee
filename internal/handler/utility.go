@@ -14,7 +14,7 @@ import (
 
 type UtilityHandler struct {
 	FileUploader *file.FileUploader
-	ErrHandler   *errHandler.ErrorRepository
+	ErrHandler   *errHandler.ErrorHandler
 }
 
 func NewUtilityHandler(handler *UtilityHandler) *UtilityHandler {

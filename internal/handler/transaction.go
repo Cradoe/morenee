@@ -87,7 +87,7 @@ type TransactionHandler struct {
 	KycRepo         repository.KycRepository
 	ActivityRepo    repository.ActivityRepository
 
-	ErrHandler *errHandler.ErrorRepository
+	ErrHandler *errHandler.ErrorHandler
 	Cache      *cache.Cache
 	Helper     *helper.HelperRepository
 	Kafka      *stream.KafkaStream

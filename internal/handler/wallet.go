@@ -31,7 +31,7 @@ type WalletResponseData struct {
 
 type WalletHandler struct {
 	WalletRepo repository.WalletRepository
-	ErrHandler *errHandler.ErrorRepository
+	ErrHandler *errHandler.ErrorHandler
 }
 
 func NewWalletHandler(handler *WalletHandler) *WalletHandler {

@@ -9,7 +9,7 @@ import (
 )
 
 type RouteHandler struct {
-	ErrHandler *errHandler.ErrorRepository
+	ErrHandler *errHandler.ErrorHandler
 }
 
 func NewRouteHandler(handler *RouteHandler) *RouteHandler {

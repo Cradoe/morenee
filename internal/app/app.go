@@ -26,7 +26,7 @@ type Application struct {
 	Logger       *slog.Logger
 	Mailer       *smtp.Mailer
 	WG           *sync.WaitGroup
-	errorHandler *errHandler.ErrorRepository
+	errorHandler *errHandler.ErrorHandler
 	Helper       *helper.HelperRepository
 	Kafka        *stream.KafkaStream
 	FileUploader *file.FileUploader

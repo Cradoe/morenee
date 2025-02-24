@@ -26,7 +26,7 @@ type UserKycDataHandler struct {
 	UserKycDataRepo    repository.UserKycDataRepository
 	KycRequirementRepo repository.KycRequirementRepository
 
-	ErrHandler *errHandler.ErrorRepository
+	ErrHandler *errHandler.ErrorHandler
 	Helper     *helper.HelperRepository
 }
 

@@ -18,13 +18,13 @@ import (
 )
 
 type Middleware struct {
-	errHandler *errHandler.ErrorRepository
+	errHandler *errHandler.ErrorHandler
 	logger     *slog.Logger
 	UserRepo   repository.UserRepository
 	config     *config.Config
 }
 
-func New(errHandler *errHandler.ErrorRepository, logger *slog.Logger, UserRepo repository.UserRepository, config *config.Config) *Middleware {
+func New(errHandler *errHandler.ErrorHandler, logger *slog.Logger, UserRepo repository.UserRepository, config *config.Config) *Middleware {
 	return &Middleware{
 		errHandler: errHandler,
 		logger:     logger,
