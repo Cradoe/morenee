@@ -16,6 +16,7 @@ import (
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
@@ -222,8 +223,8 @@ func (h *TransactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// we want to lookup sender's wallet and recipient's wallet in parallel
 	// this will reduce waiting time for the client
 
-	recipientCh := make(chan *repository.Wallet, 1)
-	senderCh := make(chan *repository.Wallet, 1)
+	recipientCh := make(chan *models.Wallet, 1)
+	senderCh := make(chan *models.Wallet, 1)
 	errCh := make(chan error, 2)
 
 	go func() {
@@ -261,8 +262,8 @@ func (h *TransactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 		}
 	}()
 
-	var recipientWallet *repository.Wallet
-	var senderWallet *repository.Wallet
+	var recipientWallet *models.Wallet
+	var senderWallet *models.Wallet
 
 	select {
 	case err := <-errCh:
@@ -323,7 +324,7 @@ func (h *TransactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 
 	// check sender kyc to be sure they are at least in kyc level 1
 	var kycLevelIDStr string
-	var senderKycLevel *repository.KYCLevel
+	var senderKycLevel *models.KYCLevel
 	if !sender.KYCLevelID.Valid {
 		response.JSONErrorResponse(w, nil, ErrCompleteProfileSetup.Error(), http.StatusUnprocessableEntity, nil)
 		return
@@ -363,7 +364,7 @@ func (h *TransactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	// ...
 
 	// Step 5: create a pending transaction and initialize a background worker to handle the rest
-	newTrans := &repository.Transaction{
+	newTrans := &models.Transaction{
 		SenderWalletID:    senderWallet.ID,
 		RecipientWalletID: recipientWallet.ID,
 		Amount:            input.Amount,
@@ -411,7 +412,7 @@ func (h *TransactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.ActivityRepo.Insert(&repository.ActivityLog{
+		_, err = h.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      transferRes.Sender.ID,
 			Entity:      repository.ActivityLogTransactionEntity,
 			EntityId:    transferRes.ID,
@@ -496,7 +497,7 @@ func (h *TransactionHandler) HandleTransactionDetails(w http.ResponseWriter, r *
 	}
 }
 
-func formTransactionResponseData(transaction *repository.TransactionDetails) *TransactionResponseData {
+func formTransactionResponseData(transaction *models.TransactionDetails) *TransactionResponseData {
 	return &TransactionResponseData{
 		ID:              transaction.ID,
 		ReferenceNumber: transaction.ReferenceNumber,

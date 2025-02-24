@@ -171,7 +171,7 @@ func (h *AuthHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request)
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
+		_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      userID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    userID,
@@ -264,7 +264,7 @@ func (h *AuthHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 		if !passwordMatches {
 			h.Helper.BackgroundTask(r, func() error {
-				_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
+				_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
 					UserID:      user.ID,
 					Entity:      repository.ActivityLogUserEntity,
 					EntityId:    user.ID,
@@ -295,7 +295,7 @@ func (h *AuthHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 				})
 
 				h.Helper.BackgroundTask(r, func() error {
-					_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
+					_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
 						UserID:      user.ID,
 						Entity:      repository.ActivityLogUserEntity,
 						EntityId:    user.ID,
@@ -337,7 +337,7 @@ func (h *AuthHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	h.Helper.BackgroundTask(r, func() error {
 
-		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
+		_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      user.ID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,
@@ -512,7 +512,7 @@ func (h *AuthHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Request
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
+		_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      user.ID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,
@@ -737,7 +737,7 @@ func (h *AuthHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
+		_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      user.ID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,

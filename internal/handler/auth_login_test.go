@@ -35,7 +35,7 @@ func TestHandleAuthLogin_ValidCredentials(t *testing.T) {
 	}
 
 	mockUserRepo.On("GetByEmail", "test@example.com").Return(testUser, true, nil)
-	mockActivityRepo.On("Insert", mock.Anything).Return(&repository.ActivityLog{}, nil)
+	mockActivityRepo.On("Insert", mock.Anything).Return(&models.ActivityLog{}, nil)
 
 	authHandler := &AuthHandler{
 		UserRepo:     mockUserRepo,

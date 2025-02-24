@@ -2,22 +2,13 @@ package repository
 
 import (
 	"context"
+
+	"github.com/cradoe/morenee/internal/models"
 )
 
-type KYCLevel struct {
-	ID                  string                `db:"id"`
-	LevelName           string                `db:"level_name"`
-	DailyTransferLimit  float64               `db:"daily_transfer_limit"`
-	WalletBalanceLimit  float64               `db:"wallet_balance_limit"`
-	SingleTransferLimit float64               `db:"single_transfer_limit"`
-	RequirementID       string                `db:"requirement_id"`
-	Requirement         string                `db:"requirement"`
-	Requirements        []KYCLevelRequirement `db:"requirements"`
-}
-
 type KycRepository interface {
-	GetAll() ([]KYCLevel, error)
-	GetOne(id string) (*KYCLevel, bool, error)
+	GetAll() ([]models.KYCLevel, error)
+	GetOne(id string) (*models.KYCLevel, bool, error)
 }
 
 type KycRepositoryImpl struct {
@@ -28,7 +19,7 @@ func NewKycRepository(db *DB) KycRepository {
 	return &KycRepositoryImpl{db: db}
 }
 
-func (repo *KycRepositoryImpl) GetAll() ([]KYCLevel, error) {
+func (repo *KycRepositoryImpl) GetAll() ([]models.KYCLevel, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -57,7 +48,7 @@ func (repo *KycRepositoryImpl) GetAll() ([]KYCLevel, error) {
 	}
 	defer rows.Close()
 
-	kycMap := make(map[string]*KYCLevel)
+	kycMap := make(map[string]*models.KYCLevel)
 
 	for rows.Next() {
 		var (
@@ -82,38 +73,38 @@ func (repo *KycRepositoryImpl) GetAll() ([]KYCLevel, error) {
 			return nil, err
 		}
 
-		// Check if KYCLevel already exists in the map
+		// Check if models.KYCLevel already exists in the map
 		kyc, exists := kycMap[levelID]
 		if !exists {
-			// Create a new KYCLevel if it doesn't exist
-			kyc = &KYCLevel{
+			// Create a new models.KYCLevel if it doesn't exist
+			kyc = &models.KYCLevel{
 				ID:                  levelID,
 				LevelName:           levelName,
 				DailyTransferLimit:  dailyTransferLimit,
 				WalletBalanceLimit:  walletBalanceLimit,
 				SingleTransferLimit: singleTransferLimit,
-				Requirements:        []KYCLevelRequirement{},
+				Requirements:        []models.KYCLevelRequirement{},
 			}
 			kycMap[levelID] = kyc
 		}
 
-		// If a requirement is present, add it to the KYCLevel
+		// If a requirement is present, add it to the models.KYCLevel
 		if requirementID != nil && requirementValue != nil {
-			kyc.Requirements = append(kyc.Requirements, KYCLevelRequirement{
+			kyc.Requirements = append(kyc.Requirements, models.KYCLevelRequirement{
 				ID:          *requirementID,
 				Requirement: *requirementValue,
 			})
 		}
 	}
 
-	var kycLevels []KYCLevel
+	var kycLevels []models.KYCLevel
 	for _, kyc := range kycMap {
 		kycLevels = append(kycLevels, *kyc)
 	}
 
 	return kycLevels, nil
 }
-func (repo *KycRepositoryImpl) GetOne(id string) (*KYCLevel, bool, error) {
+func (repo *KycRepositoryImpl) GetOne(id string) (*models.KYCLevel, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -142,14 +133,14 @@ func (repo *KycRepositoryImpl) GetOne(id string) (*KYCLevel, bool, error) {
 	}
 	defer rows.Close()
 
-	var kyc *KYCLevel
-	kycRequirements := []KYCLevelRequirement{}
+	var kyc *models.KYCLevel
+	kycRequirements := []models.KYCLevelRequirement{}
 
 	for rows.Next() {
 		var (
 			requirementID    *string
 			requirementValue *string
-			tempKYC          KYCLevel
+			tempKYC          models.KYCLevel
 		)
 
 		if err := rows.Scan(
@@ -170,7 +161,7 @@ func (repo *KycRepositoryImpl) GetOne(id string) (*KYCLevel, bool, error) {
 
 		// Append requirement if it exists
 		if requirementID != nil && requirementValue != nil {
-			kycRequirements = append(kycRequirements, KYCLevelRequirement{
+			kycRequirements = append(kycRequirements, models.KYCLevelRequirement{
 				ID:          *requirementID,
 				Requirement: *requirementValue,
 			})

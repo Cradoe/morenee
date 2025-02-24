@@ -3,15 +3,12 @@ package repository
 import (
 	"context"
 	"database/sql"
+
+	"github.com/cradoe/morenee/internal/models"
 )
 
-type KYCLevelRequirement struct {
-	ID          string `db:"id"`
-	Requirement string `db:"requirement"`
-}
-
 type KycRequirementRepository interface {
-	FindByName(name string) (*KYCLevelRequirement, bool, error)
+	FindByName(name string) (*models.KYCLevelRequirement, bool, error)
 }
 
 type KycRequirementRepositoryImpl struct {
@@ -22,11 +19,11 @@ func NewKycRequirementRepository(db *DB) KycRequirementRepository {
 	return &KycRequirementRepositoryImpl{db: db}
 }
 
-func (repo *KycRequirementRepositoryImpl) FindByName(name string) (*KYCLevelRequirement, bool, error) {
+func (repo *KycRequirementRepositoryImpl) FindByName(name string) (*models.KYCLevelRequirement, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var requirement KYCLevelRequirement
+	var requirement models.KYCLevelRequirement
 	query := `SELECT  id, requirement FROM kyc_requirements WHERE requirement = $1 LIMIT 1;`
 
 	err := repo.db.GetContext(ctx, &requirement, query, name)

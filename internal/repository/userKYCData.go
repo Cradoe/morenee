@@ -3,24 +3,14 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"time"
+
+	"github.com/cradoe/morenee/internal/models"
 )
-
-type KYCData struct {
-	ID             string    `db:"id"`
-	UserID         string    `db:"user_id"`
-	SubmissionData string    `db:"submission_data"`
-	Verified       bool      `db:"verified"`
-	CreatedAt      time.Time `db:"created_at"`
-	RequirementID  string    `db:"kyc_requirement_id"`
-
-	Requirement string `db:"requirement"`
-}
 
 type UserKycDataRepository interface {
 	Insert(userID, submissionData, requirementID string) error
-	GetAll(userID string) ([]KYCData, error)
-	GetByRequirementId(userID, kycRequirementID string) (*KYCData, bool, error)
+	GetAll(userID string) ([]models.KYCData, error)
+	GetByRequirementId(userID, kycRequirementID string) (*models.KYCData, bool, error)
 	UpgradeLevel(userID string) (bool, error)
 }
 
@@ -49,7 +39,7 @@ func (repo *UserKycDataRepositoryImpl) Insert(userID, submissionData, requiremen
 	return nil
 }
 
-func (repo *UserKycDataRepositoryImpl) GetAll(userID string) ([]KYCData, error) {
+func (repo *UserKycDataRepositoryImpl) GetAll(userID string) ([]models.KYCData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -78,9 +68,9 @@ func (repo *UserKycDataRepositoryImpl) GetAll(userID string) ([]KYCData, error) 
 	}
 	defer rows.Close()
 
-	var kycDataList []KYCData
+	var kycDataList []models.KYCData
 	for rows.Next() {
-		var kycData KYCData
+		var kycData models.KYCData
 		if err := rows.Scan(
 			&kycData.ID,
 			&kycData.UserID,
@@ -102,7 +92,7 @@ func (repo *UserKycDataRepositoryImpl) GetAll(userID string) ([]KYCData, error) 
 	return kycDataList, nil
 }
 
-func (repo *UserKycDataRepositoryImpl) GetByRequirementId(userID, kycRequirementID string) (*KYCData, bool, error) {
+func (repo *UserKycDataRepositoryImpl) GetByRequirementId(userID, kycRequirementID string) (*models.KYCData, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -116,7 +106,7 @@ func (repo *UserKycDataRepositoryImpl) GetByRequirementId(userID, kycRequirement
 			user_id = $1 AND kyc_requirement_id = $2
 	`
 
-	var kycData KYCData
+	var kycData models.KYCData
 	err := repo.db.GetContext(ctx, &kycData, query, userID, kycRequirementID)
 
 	if err == sql.ErrNoRows {

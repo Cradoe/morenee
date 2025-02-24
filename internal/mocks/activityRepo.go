@@ -1,7 +1,7 @@
 package mocks
 
 import (
-	"github.com/cradoe/morenee/internal/repository"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -13,7 +13,7 @@ func (m *MockActivityRepo) CountConsecutiveFailedLoginAttempts(userID, action_de
 	return 0
 }
 
-func (m *MockActivityRepo) Insert(log *repository.ActivityLog) (*repository.ActivityLog, error) {
+func (m *MockActivityRepo) Insert(log *models.ActivityLog) (*models.ActivityLog, error) {
 	args := m.Called(log)
-	return args.Get(0).(*repository.ActivityLog), args.Error(1)
+	return args.Get(0).(*models.ActivityLog), args.Error(1)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/response"
 )
@@ -40,14 +41,14 @@ func NewWalletHandler(handler *WalletHandler) *WalletHandler {
 	}
 }
 
-func (h *WalletHandler) generateWallet(user_id string, phone_number string, tx *sql.Tx) (*repository.Wallet, error) {
+func (h *WalletHandler) generateWallet(user_id string, phone_number string, tx *sql.Tx) (*models.Wallet, error) {
 
 	// we don't have to manually check if account_number already exists because
 	// we've established that phone_number is unique in users table.
 	// However, if we, in the future, need to generate account number that's not user's phone number,
 	// we'd have to validate non-existence.
 	// We'll just keep it like this for now
-	userWallet := &repository.Wallet{
+	userWallet := &models.Wallet{
 		UserID: user_id,
 		AccountNumber: func() string {
 			if len(phone_number) > 10 {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/cradoe/morenee/internal/handler"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/stream"
 )
@@ -97,7 +98,7 @@ func (wk *Worker) debitAccount(transferReq *handler.TransactionResponseData) boo
 
 	// log operation
 	wk.Helper.BackgroundTask(nil, func() error {
-		_, err = wk.ActivityRepo.Insert(&repository.ActivityLog{
+		_, err = wk.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      transferReq.Sender.ID,
 			Entity:      repository.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
@@ -123,7 +124,7 @@ func (wk *Worker) processFailedDebit(transferReq *handler.TransactionResponseDat
 		return false
 	}
 	// create an activity log to this effect
-	_, err = wk.ActivityRepo.Insert(&repository.ActivityLog{
+	_, err = wk.ActivityRepo.Insert(&models.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      repository.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,

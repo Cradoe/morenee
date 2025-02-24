@@ -4,20 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
-)
 
-type Wallet struct {
-	ID            string       `db:"id"`
-	UserID        string       `db:"user_id"`
-	Balance       float64      `db:"balance"`
-	AccountNumber string       `db:"account_number"`
-	Currency      string       `db:"currency"`
-	Status        string       `db:"status"`
-	CreatedAt     time.Time    `db:"created_at"`
-	DeletedAt     sql.NullTime `db:"deleted_at"`
-	UpdatedAt     sql.NullTime `db:"updated_at"`
-}
+	"github.com/cradoe/morenee/internal/models"
+)
 
 const (
 	WalletActiveStatus = "active"
@@ -25,11 +14,11 @@ const (
 )
 
 type WalletRepository interface {
-	Insert(wallet *Wallet, tx *sql.Tx) (string, error)
-	Balance(id string) (*Wallet, error)
-	GetAllByUserId(userID string) ([]Wallet, bool, error)
-	GetOne(id string) (*Wallet, bool, error)
-	FindByAccountNumber(account_number string) (*Wallet, bool, error)
+	Insert(wallet *models.Wallet, tx *sql.Tx) (string, error)
+	Balance(id string) (*models.Wallet, error)
+	GetAllByUserId(userID string) ([]models.Wallet, bool, error)
+	GetOne(id string) (*models.Wallet, bool, error)
+	FindByAccountNumber(account_number string) (*models.Wallet, bool, error)
 	Debit(walletID string, amount float64) (bool, error)
 	Credit(walletID string, amount float64) (bool, error)
 	Lock(id string) error
@@ -43,7 +32,7 @@ func NewWalletRepository(db *DB) WalletRepository {
 	return &WalletRepositoryImpl{db: db}
 }
 
-func (repo *WalletRepositoryImpl) Insert(wallet *Wallet, tx *sql.Tx) (string, error) {
+func (repo *WalletRepositoryImpl) Insert(wallet *models.Wallet, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -75,11 +64,11 @@ func (repo *WalletRepositoryImpl) Insert(wallet *Wallet, tx *sql.Tx) (string, er
 	return id, nil
 }
 
-func (repo *WalletRepositoryImpl) Balance(id string) (*Wallet, error) {
+func (repo *WalletRepositoryImpl) Balance(id string) (*models.Wallet, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var wallet Wallet
+	var wallet models.Wallet
 
 	query := `
         SELECT user_id, balance, currency FROM wallets WHERE id=$1 AND deleted_at IS NULL`
@@ -96,11 +85,11 @@ func (repo *WalletRepositoryImpl) Balance(id string) (*Wallet, error) {
 	return &wallet, nil
 }
 
-func (repo *WalletRepositoryImpl) GetAllByUserId(userID string) ([]Wallet, bool, error) {
+func (repo *WalletRepositoryImpl) GetAllByUserId(userID string) ([]models.Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var wallets []Wallet
+	var wallets []models.Wallet
 
 	query := `
         SELECT id, balance, currency, account_number, status, created_at FROM wallets WHERE user_id=$1 AND deleted_at IS NULL`
@@ -117,11 +106,11 @@ func (repo *WalletRepositoryImpl) GetAllByUserId(userID string) ([]Wallet, bool,
 	return wallets, true, nil
 }
 
-func (repo *WalletRepositoryImpl) GetOne(id string) (*Wallet, bool, error) {
+func (repo *WalletRepositoryImpl) GetOne(id string) (*models.Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var wallet Wallet
+	var wallet models.Wallet
 
 	query := `
         SELECT id, user_id, balance, currency, account_number, status, created_at FROM wallets WHERE id=$1 AND deleted_at IS NULL`
@@ -138,11 +127,11 @@ func (repo *WalletRepositoryImpl) GetOne(id string) (*Wallet, bool, error) {
 	return &wallet, true, nil
 }
 
-func (repo *WalletRepositoryImpl) FindByAccountNumber(account_number string) (*Wallet, bool, error) {
+func (repo *WalletRepositoryImpl) FindByAccountNumber(account_number string) (*models.Wallet, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var wallet Wallet
+	var wallet models.Wallet
 
 	query := `
         SELECT id, user_id, balance, currency, account_number, status, created_at FROM wallets WHERE account_number=$1 AND deleted_at IS NULL`
@@ -175,7 +164,7 @@ func (repo *WalletRepositoryImpl) Debit(walletID string, amount float64) (bool, 
 
 	defer tx.Rollback()
 
-	var wallet Wallet
+	var wallet models.Wallet
 
 	query := `
 		SELECT balance FROM wallets WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`
@@ -221,7 +210,7 @@ func (repo *WalletRepositoryImpl) Credit(walletID string, amount float64) (bool,
 
 	defer tx.Rollback()
 
-	var wallet Wallet
+	var wallet models.Wallet
 
 	query := `
 		SELECT balance FROM wallets WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`

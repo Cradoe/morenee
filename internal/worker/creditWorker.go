@@ -17,6 +17,7 @@ import (
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/cradoe/morenee/internal/handler"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/stream"
 )
@@ -100,7 +101,7 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 
 	// log operation
 	wk.Helper.BackgroundTask(nil, func() error {
-		_, err = wk.ActivityRepo.Insert(&repository.ActivityLog{
+		_, err = wk.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      transferReq.Recipient.ID,
 			Entity:      repository.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,
@@ -180,7 +181,7 @@ func (wk *Worker) creditAccount(transferReq *handler.TransactionResponseData) bo
 // 6. Logs the new reversal transaction to document the entire process.
 func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseData) bool {
 	// Log the failed credit attempt synchronously
-	_, err := wk.ActivityRepo.Insert(&repository.ActivityLog{
+	_, err := wk.ActivityRepo.Insert(&models.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      repository.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
@@ -198,7 +199,7 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 	}
 
 	// Log the successful credit reversal
-	_, err = wk.ActivityRepo.Insert(&repository.ActivityLog{
+	_, err = wk.ActivityRepo.Insert(&models.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      repository.ActivityLogTransactionEntity,
 		EntityId:    transferReq.ID,
@@ -217,7 +218,7 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 
 	// Create a new transaction for the reversal
 	desc := fmt.Sprintf("Reversal of %f", transferReq.Amount)
-	newTrans := &repository.Transaction{
+	newTrans := &models.Transaction{
 		SenderWalletID:    transferReq.Sender.Wallet.ID,
 		RecipientWalletID: transferReq.Sender.Wallet.ID, // sender is the recipient in a reversal
 		Amount:            transferReq.Amount,
@@ -231,7 +232,7 @@ func (wk *Worker) processFailedCredit(transferReq *handler.TransactionResponseDa
 	}
 
 	// Log the reversal transaction
-	_, err = wk.ActivityRepo.Insert(&repository.ActivityLog{
+	_, err = wk.ActivityRepo.Insert(&models.ActivityLog{
 		UserID:      transferReq.Sender.ID,
 		Entity:      repository.ActivityLogTransactionEntity,
 		EntityId:    transactionID,

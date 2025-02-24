@@ -21,3 +21,16 @@ type User struct {
 	VerifiedAt     sql.NullTime   `db:"verified_at"`
 	HashedPassword string         `db:"hashed_password"`
 }
+
+type NextOfKin struct {
+	ID           string       `db:"id"`
+	UserID       string       `db:"user_id"`
+	Email        string       `db:"email"`
+	FirstName    string       `db:"first_name"`
+	LastName     string       `db:"last_name"`
+	PhoneNumber  string       `db:"phone_number"`
+	Relationship string       `db:"relationship"`
+	Address      string       `db:"address"`
+	CreatedAt    time.Time    `db:"created_at"`
+	DeletedAt    sql.NullTime `db:"deleted_at"`
+}

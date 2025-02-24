@@ -11,48 +11,11 @@ import (
 	"github.com/cradoe/morenee/internal/models"
 )
 
-type Transaction struct {
-	ID                string         `db:"id"`
-	SenderWalletID    string         `db:"sender_wallet_id"`
-	RecipientWalletID string         `db:"recipient_wallet_id"`
-	ReferenceNumber   string         `db:"reference_number"`
-	Amount            float64        `db:"amount"`
-	Description       sql.NullString `db:"description"`
-	Status            string         `db:"status"`
-	CreatedAt         time.Time      `db:"created_at"`
-	UpdatedAt         sql.NullTime   `db:"updated_at"`
-
-	Sender    models.User `db:"sender"`
-	Recipient models.User `db:"recipient"`
-}
-type TransactionDetails struct {
-	ID              string       `db:"id"`
-	ReferenceNumber string       `db:"reference_number"`
-	Amount          float64      `db:"amount"`
-	Status          string       `db:"status"`
-	Description     string       `db:"description"`
-	CreatedAt       sql.NullTime `db:"created_at"`
-
-	// Sender details
-	SenderID        string `db:"sender_id"`
-	SenderFirstName string `db:"sender_first_name"`
-	SenderLastName  string `db:"sender_last_name"`
-	SenderWalletID  string `db:"sender_wallet_id"`
-	SenderAccount   string `db:"sender_account_number"`
-
-	// Recipient details
-	RecipientID        string `db:"recipient_id"`
-	RecipientFirstName string `db:"recipient_first_name"`
-	RecipientLastName  string `db:"recipient_last_name"`
-	RecipientWalletID  string `db:"recipient_wallet_id"`
-	RecipientAccount   string `db:"recipient_account_number"`
-}
-
 type TransactionRepository interface {
-	Insert(transaction *Transaction, tx *sql.Tx) (string, error)
+	Insert(transaction *models.Transaction, tx *sql.Tx) (string, error)
 	UpdateStatus(transactionID string, status string) (bool, error)
-	GetOne(id string) (*TransactionDetails, bool, error)
-	FindAllByWalletId(walletId string, option *FilterTransactionsOptions) ([]*TransactionDetails, bool, error)
+	GetOne(id string) (*models.TransactionDetails, bool, error)
+	FindAllByWalletId(walletId string, option *FilterTransactionsOptions) ([]*models.TransactionDetails, bool, error)
 	HasExceededDailyLimit(walletID string, intending_amount float64, dailyLimit float64) (bool, error)
 }
 
@@ -113,7 +76,7 @@ const (
 	TransactionStatusReversed = "reversed"
 )
 
-func (repo *TransactionRepositoryImpl) Insert(transaction *Transaction, tx *sql.Tx) (string, error) {
+func (repo *TransactionRepositoryImpl) Insert(transaction *models.Transaction, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -176,11 +139,11 @@ func (repo *TransactionRepositoryImpl) UpdateStatus(transactionID string, status
 	return true, nil
 }
 
-func (repo *TransactionRepositoryImpl) GetOne(id string) (*TransactionDetails, bool, error) {
+func (repo *TransactionRepositoryImpl) GetOne(id string) (*models.TransactionDetails, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var transaction TransactionDetails
+	var transaction models.TransactionDetails
 
 	query := getTransactionBasicQuery + `
 
@@ -208,7 +171,7 @@ type FilterTransactionsOptions struct {
 	Limit       int
 }
 
-func (repo *TransactionRepositoryImpl) FindAllByWalletId(walletId string, option *FilterTransactionsOptions) ([]*TransactionDetails, bool, error) {
+func (repo *TransactionRepositoryImpl) FindAllByWalletId(walletId string, option *FilterTransactionsOptions) ([]*models.TransactionDetails, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -283,7 +246,7 @@ func (repo *TransactionRepositoryImpl) FindAllByWalletId(walletId string, option
 	query += " OFFSET $" + strconv.Itoa(placeholderIdx)
 	args = append(args, option.Offset)
 
-	var transactions []*TransactionDetails
+	var transactions []*models.TransactionDetails
 	err := repo.db.SelectContext(ctx, &transactions, query, args...)
 	if err != nil {
 		return nil, false, err

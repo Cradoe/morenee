@@ -11,21 +11,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
+
+	"github.com/cradoe/morenee/internal/models"
 )
 
 type ActivityRepository interface {
 	CountConsecutiveFailedLoginAttempts(userID, action_desc string) int
-	Insert(log *ActivityLog) (*ActivityLog, error)
-}
-
-type ActivityLog struct {
-	ID          string    `db:"id"`
-	UserID      string    `db:"user_id"`
-	Entity      string    `db:"entity"`
-	EntityId    string    `db:"entity_id"`
-	Description string    `db:"description"`
-	CreatedAt   time.Time `db:"created_at"`
+	Insert(log *models.ActivityLog) (*models.ActivityLog, error)
 }
 
 const (
@@ -47,11 +39,11 @@ func NewActivityRepository(db *DB) ActivityRepository {
 	return &ActivityRepositoryImpl{db: db}
 }
 
-func (repo *ActivityRepositoryImpl) Insert(log *ActivityLog) (*ActivityLog, error) {
+func (repo *ActivityRepositoryImpl) Insert(log *models.ActivityLog) (*models.ActivityLog, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var trans ActivityLog
+	var trans models.ActivityLog
 
 	query := `
 		INSERT INTO activity_logs (user_id, entity, entity_id, description)

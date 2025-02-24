@@ -10,6 +10,7 @@ import (
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/cradoe/morenee/internal/handler"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/stream"
 )
@@ -64,7 +65,7 @@ func (wk *Worker) completeTransferOperation(transferReq *handler.TransactionResp
 	}
 
 	wk.Helper.BackgroundTask(nil, func() error {
-		_, err = wk.ActivityRepo.Insert(&repository.ActivityLog{
+		_, err = wk.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      transferReq.Sender.ID,
 			Entity:      repository.ActivityLogTransactionEntity,
 			EntityId:    transferReq.ID,

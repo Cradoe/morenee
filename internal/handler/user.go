@@ -11,6 +11,7 @@ import (
 	"github.com/cradoe/morenee/internal/context"
 	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
@@ -139,7 +140,7 @@ func (h *UserHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.ActivityRepo.Insert(&repository.ActivityLog{
+		_, err = h.ActivityRepo.Insert(&models.ActivityLog{
 			UserID:      user.ID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,
@@ -323,7 +324,7 @@ func (h *UserHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request)
 
 	// if yes, then update the existing one
 	if found {
-		_, err = h.NextOfKinRepo.Update(existingRecord.ID, &repository.NextOfKin{
+		_, err = h.NextOfKinRepo.Update(existingRecord.ID, &models.NextOfKin{
 			FirstName:    input.FirstName,
 			LastName:     input.LastName,
 			Email:        input.Email,
@@ -334,7 +335,7 @@ func (h *UserHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request)
 
 	} else {
 		// create a new record
-		_, err = h.NextOfKinRepo.Insert(&repository.NextOfKin{
+		_, err = h.NextOfKinRepo.Insert(&models.NextOfKin{
 			FirstName:    input.FirstName,
 			LastName:     input.LastName,
 			Email:        input.Email,

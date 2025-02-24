@@ -4,26 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
+
+	"github.com/cradoe/morenee/internal/models"
 )
 
-type NextOfKin struct {
-	ID           string       `db:"id"`
-	UserID       string       `db:"user_id"`
-	Email        string       `db:"email"`
-	FirstName    string       `db:"first_name"`
-	LastName     string       `db:"last_name"`
-	PhoneNumber  string       `db:"phone_number"`
-	Relationship string       `db:"relationship"`
-	Address      string       `db:"address"`
-	CreatedAt    time.Time    `db:"created_at"`
-	DeletedAt    sql.NullTime `db:"deleted_at"`
-}
-
 type NextOfKinRepository interface {
-	Insert(nextOfKin *NextOfKin) (string, error)
-	Update(id string, nextOfKin *NextOfKin) (bool, error)
-	FindOneByUserID(userID string) (*NextOfKin, bool, error)
+	Insert(nextOfKin *models.NextOfKin) (string, error)
+	Update(id string, nextOfKin *models.NextOfKin) (bool, error)
+	FindOneByUserID(userID string) (*models.NextOfKin, bool, error)
 }
 
 type NextOfKinRepositoryImpl struct {
@@ -34,7 +22,7 @@ func NewNextOfKinRepository(db *DB) NextOfKinRepository {
 	return &NextOfKinRepositoryImpl{db: db}
 }
 
-func (repo *NextOfKinRepositoryImpl) Insert(nextOfKin *NextOfKin) (string, error) {
+func (repo *NextOfKinRepositoryImpl) Insert(nextOfKin *models.NextOfKin) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -62,7 +50,7 @@ func (repo *NextOfKinRepositoryImpl) Insert(nextOfKin *NextOfKin) (string, error
 	return id, nil
 }
 
-func (repo *NextOfKinRepositoryImpl) Update(id string, nextOfKin *NextOfKin) (bool, error) {
+func (repo *NextOfKinRepositoryImpl) Update(id string, nextOfKin *models.NextOfKin) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -99,11 +87,11 @@ func (repo *NextOfKinRepositoryImpl) Update(id string, nextOfKin *NextOfKin) (bo
 	return rowsAffected > 0, nil
 }
 
-func (repo *NextOfKinRepositoryImpl) FindOneByUserID(userID string) (*NextOfKin, bool, error) {
+func (repo *NextOfKinRepositoryImpl) FindOneByUserID(userID string) (*models.NextOfKin, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var nextOfKin NextOfKin
+	var nextOfKin models.NextOfKin
 
 	query := `SELECT id, first_name, last_name, email, address, phone_number, relationship, created_at 
 	FROM next_of_kins WHERE user_id=$1 LIMIT 1`
