@@ -79,3 +79,62 @@ func TestHandleAuthLogin_ValidCredentials(t *testing.T) {
 	mockActivityRepo.AssertExpectations(t)
 	mockMailer.AssertExpectations(t)
 }
+
+func TestHandleAuthLogin_IncorrectPassword(t *testing.T) {
+	mockUserRepo := new(mocks.MockUserRepo)
+	mockActivityRepo := new(mocks.MockActivityRepo)
+	mockMailer := new(mocks.MockMailer)
+
+	var baseURL string = "http://localhost"
+	var wg sync.WaitGroup
+	mockHelper := helper.New(&baseURL, &wg, nil)
+
+	testUser := &models.User{
+		ID:             "123",
+		Email:          "test@example.com",
+		HashedPassword: "$2a$10$oiIYEECpY/GRNs9Fi7Yh1.o4Dw2fTD26eu5z48KYgXkMuOiWlSvqG", // Correct hash but wrong input password
+		Status:         repository.UserAccountActiveStatus,
+	}
+
+	mockUserRepo.On("GetByEmail", "test@example.com").Return(testUser, true, nil)
+	mockActivityRepo.On("Insert", mock.Anything).Return(&models.ActivityLog{}, nil)
+	mockActivityRepo.On("CountConsecutiveFailedLoginAttempts", mock.Anything, mock.Anything).Return(1)
+
+	authHandler := &AuthHandler{
+		UserRepo:     mockUserRepo,
+		ActivityRepo: mockActivityRepo,
+		Helper:       mockHelper,
+		Mailer:       mockMailer,
+		Config:       mocks.MockConfig,
+	}
+
+	requestBody, _ := json.Marshal(map[string]string{
+		"email":    "test@example.com",
+		"password": "wrongpassword",
+	})
+
+	req, err := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(requestBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+
+	// Act
+	authHandler.HandleAuthLogin(rr, req)
+
+	// Assert
+	require.Equal(t, http.StatusUnauthorized, rr.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(rr.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	require.Contains(t, response, "message")
+	require.Equal(t, "Incorrect email/password", response["message"])
+
+	require.Contains(t, response, "success")
+	require.Equal(t, false, response["success"])
+
+	mockUserRepo.AssertExpectations(t)
+	mockActivityRepo.AssertExpectations(t)
+}

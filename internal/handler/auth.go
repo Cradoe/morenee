@@ -240,35 +240,75 @@ func (h *AuthHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
+	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
+
+	input.Validator.Check(validator.NotBlank(input.Password), "Password is required")
+
+	if input.Validator.HasErrors() {
+		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
+		return
+	}
+
 	user, found, err := h.UserRepo.GetByEmail(input.Email)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
-	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
-	input.Validator.Check(found, "Incorrect email/password")
+	if !found {
+		message := "Incorrect email/password"
+		response.JSONErrorResponse(w, nil, message, http.StatusUnauthorized, nil)
+		return
+	}
 
 	// validate password is user is found
-	if found {
 
-		passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
-		if err != nil {
-			h.ErrHandler.ServerError(w, r, err)
-			return
-		}
+	passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
+	if err != nil {
+		h.ErrHandler.ServerError(w, r, err)
+		return
+	}
 
-		input.Validator.Check(validator.NotBlank(input.Password), "Password is required")
-		input.Validator.Check(passwordMatches, "Incorrect email/password")
+	if !passwordMatches {
 
-		if !passwordMatches {
+		h.Helper.BackgroundTask(r, func() error {
+			_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
+				UserID:      user.ID,
+				Entity:      repository.ActivityLogUserEntity,
+				EntityId:    user.ID,
+				Description: UserActivityLogFailedLoginDescription,
+			})
+
+			if localErr != nil {
+				log.Printf("Error logging failed login action: %v", localErr)
+				return localErr
+			}
+
+			return nil
+		})
+
+		//  if password is not correct, log, that, and lock the account after 3 consecutive failed attempts
+		count := h.ActivityRepo.CountConsecutiveFailedLoginAttempts(user.ID, UserActivityLogFailedLoginDescription)
+		// check if we already have 2 failed login attempts before this one.
+		if count >= 2 {
+			h.Helper.BackgroundTask(r, func() error {
+				localErr := h.UserRepo.Lock(user.ID)
+
+				if localErr != nil {
+					log.Printf("Error Locking account due to failed login action: %v", localErr)
+					return localErr
+				}
+
+				return nil
+			})
+
 			h.Helper.BackgroundTask(r, func() error {
 				_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
 					UserID:      user.ID,
 					Entity:      repository.ActivityLogUserEntity,
 					EntityId:    user.ID,
-					Description: UserActivityLogFailedLoginDescription,
+					Description: UserActivityLogLockedAccountDescription,
 				})
 
 				if localErr != nil {
@@ -279,59 +319,26 @@ func (h *AuthHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 				return nil
 			})
 
-			//  if password is not correct, log, that, and lock the account after 3 consecutive failed attempts
-			count := h.ActivityRepo.CountConsecutiveFailedLoginAttempts(user.ID, UserActivityLogFailedLoginDescription)
-			// check if we already have 2 failed login attempts before this one.
-			if count >= 2 {
-				h.Helper.BackgroundTask(r, func() error {
-					localErr := h.UserRepo.Lock(user.ID)
-
-					if localErr != nil {
-						log.Printf("Error Locking account due to failed login action: %v", localErr)
-						return localErr
-					}
-
-					return nil
-				})
-
-				h.Helper.BackgroundTask(r, func() error {
-					_, localErr := h.ActivityRepo.Insert(&models.ActivityLog{
-						UserID:      user.ID,
-						Entity:      repository.ActivityLogUserEntity,
-						EntityId:    user.ID,
-						Description: UserActivityLogLockedAccountDescription,
-					})
-
-					if localErr != nil {
-						log.Printf("Error logging failed login action: %v", localErr)
-						return localErr
-					}
-
-					return nil
-				})
-
-				h.ErrHandler.FailedValidation(w, r, []string{"Account has been locked. Please contact support"})
-				return
-			}
+			message := "Account has been locked. Please contact support"
+			response.JSONErrorResponse(w, nil, message, http.StatusUnauthorized, nil)
+			return
 		}
 
-	}
-
-	if input.Validator.HasErrors() {
-		h.ErrHandler.FailedValidation(w, r, input.Validator.Errors)
+		message := "Incorrect email/password"
+		response.JSONErrorResponse(w, nil, message, http.StatusUnauthorized, nil)
 		return
 	}
 
 	// check that account is active
 	if user.Status == repository.UserAccountActivePending {
 		message := "Account not yet verified"
-		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
+		response.JSONErrorResponse(w, nil, message, http.StatusUnauthorized, nil)
 		return
 	}
 
 	if user.Status == repository.UserAccountLockedStatus {
 		message := "Account has been locked. Please contact support"
-		response.JSONErrorResponse(w, nil, message, http.StatusForbidden, nil)
+		response.JSONErrorResponse(w, nil, message, http.StatusUnauthorized, nil)
 		return
 	}
 
