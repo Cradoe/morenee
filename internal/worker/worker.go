@@ -10,8 +10,13 @@ import (
 )
 
 type Worker struct {
+	UserRepo        repository.UserRepository
+	TransactionRepo repository.TransactionRepository
+	WalletRepo      repository.WalletRepository
+	KycRepo         repository.KycRepository
+	ActivityRepo    repository.ActivityRepository
+
 	KafkaStream *stream.KafkaStream
-	DB          repository.Database
 	Ctx         context.Context
 	Helper      *helper.HelperRepository
 	Mailer      *smtp.Mailer
@@ -45,8 +50,13 @@ const (
 // worker-specific dependency can be passed as argument to the worker
 func New(wk *Worker) *Worker {
 	return &Worker{
+		UserRepo:        wk.UserRepo,
+		TransactionRepo: wk.TransactionRepo,
+		WalletRepo:      wk.WalletRepo,
+		KycRepo:         wk.KycRepo,
+		ActivityRepo:    wk.ActivityRepo,
+
 		KafkaStream: wk.KafkaStream,
-		DB:          wk.DB,
 		Ctx:         wk.Ctx,
 		Helper:      wk.Helper,
 		Mailer:      wk.Mailer,

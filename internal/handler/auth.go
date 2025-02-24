@@ -5,20 +5,52 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cradoe/morenee/internal/cache"
+	"github.com/cradoe/morenee/internal/config"
+	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
+	"github.com/cradoe/morenee/internal/smtp"
 	"github.com/cradoe/morenee/internal/validator"
 
 	"github.com/cradoe/gopass"
 	"github.com/pascaldekloe/jwt"
 )
 
+type AuthHandler struct {
+	DB           *repository.DB
+	UserRepo     repository.UserRepository
+	ActivityRepo repository.ActivityRepository
+	WalletRepo   repository.WalletRepository
+	Config       *config.Config
+	ErrHandler   *errHandler.ErrorRepository
+	Mailer       smtp.MailerInterface
+	Helper       *helper.HelperRepository
+	Cache        *cache.Cache
+}
+
+func NewAuthHandler(handler *AuthHandler) *AuthHandler {
+	return &AuthHandler{
+		DB:           handler.DB,
+		UserRepo:     handler.UserRepo,
+		ActivityRepo: handler.ActivityRepo,
+		WalletRepo:   handler.WalletRepo,
+		ErrHandler:   handler.ErrHandler,
+		Config:       handler.Config,
+		Mailer:       handler.Mailer,
+		Helper:       handler.Helper,
+		Cache:        handler.Cache,
+	}
+}
+
 // New user registration typically involves:
 // Input validations and checking that records has not already existed for the unique fields, such as enail
 // We then start a database transaction to insert the user record and also create a wallet for the user
 // Failed operatin at any point will make the function to rollback their actions
-func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email       string              `json:"email"`
 		Password    string              `json:"password"`
@@ -46,7 +78,7 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, found, err := h.DB.User().GetByEmail(input.Email)
+	_, found, err := h.UserRepo.GetByEmail(input.Email)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -70,7 +102,7 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 	input.Validator.Check(validator.Matches(input.PhoneNumber, validator.RgxPhoneNumber), "Phone number must be in international format")
 
 	// we want to make sure no two users have the same phone number
-	found, err = h.DB.User().CheckIfPhoneNumberExist(input.PhoneNumber)
+	found, err = h.UserRepo.CheckIfPhoneNumberExist(input.PhoneNumber)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -105,7 +137,7 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 		}
 	}()
 
-	createdUser := &repository.User{
+	createdUser := &models.User{
 		FirstName:      input.FirstName,
 		LastName:       input.LastName,
 		Email:          input.Email,
@@ -114,7 +146,7 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 		HashedPassword: hashedPassword,
 	}
 
-	userID, err := h.DB.User().Insert(createdUser, tx)
+	userID, err := h.UserRepo.Insert(createdUser, tx)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -128,27 +160,27 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 	// send verification OTP
 	h.Helper.BackgroundTask(r, func() error {
 		createdUser.ID = userID
-		err = h.generateAndSendVerificationOTP(createdUser)
+		localErr := h.generateAndSendVerificationOTP(createdUser)
 
-		if err != nil {
-			log.Printf("Error sending verification email: %v", err)
-			return err
+		if localErr != nil {
+			log.Printf("Error sending verification email: %v", localErr)
+			return localErr
 		}
 
 		return nil
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.Activity().Insert(&repository.ActivityLog{
+		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
 			UserID:      userID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    userID,
 			Description: UserActivityLogRegistrationDescription,
 		})
 
-		if err != nil {
-			log.Printf("Error logging user registration action: %v", err)
-			return err
+		if localErr != nil {
+			log.Printf("Error logging user registration action: %v", localErr)
+			return localErr
 		}
 
 		return nil
@@ -163,7 +195,7 @@ func (h *RouteHandler) HandleAuthRegister(w http.ResponseWriter, r *http.Request
 
 }
 
-func (h *RouteHandler) generateAndSendVerificationOTP(user *repository.User) error {
+func (h *AuthHandler) generateAndSendVerificationOTP(user *models.User) error {
 
 	otp, err := gopass.GenerateOTP(5)
 
@@ -195,7 +227,7 @@ func (h *RouteHandler) generateAndSendVerificationOTP(user *repository.User) err
 	return nil
 }
 
-func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email     string              `json:"email"`
 		Password  string              `json:"password"`
@@ -208,7 +240,7 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, found, err := h.DB.User().GetByEmail(input.Email)
+	user, found, err := h.UserRepo.GetByEmail(input.Email)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -220,6 +252,7 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	// validate password is user is found
 	if found {
+
 		passwordMatches, err := gopass.ComparePasswordAndHash(input.Password, user.HashedPassword)
 		if err != nil {
 			h.ErrHandler.ServerError(w, r, err)
@@ -231,47 +264,47 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 		if !passwordMatches {
 			h.Helper.BackgroundTask(r, func() error {
-				_, err = h.DB.Activity().Insert(&repository.ActivityLog{
+				_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
 					UserID:      user.ID,
 					Entity:      repository.ActivityLogUserEntity,
 					EntityId:    user.ID,
 					Description: UserActivityLogFailedLoginDescription,
 				})
 
-				if err != nil {
-					log.Printf("Error logging failed login action: %v", err)
-					return err
+				if localErr != nil {
+					log.Printf("Error logging failed login action: %v", localErr)
+					return localErr
 				}
 
 				return nil
 			})
 
 			//  if password is not correct, log, that, and lock the account after 3 consecutive failed attempts
-			count := h.DB.Activity().CountConsecutiveFailedLoginAttempts(user.ID, UserActivityLogFailedLoginDescription)
+			count := h.ActivityRepo.CountConsecutiveFailedLoginAttempts(user.ID, UserActivityLogFailedLoginDescription)
 			// check if we already have 2 failed login attempts before this one.
 			if count >= 2 {
 				h.Helper.BackgroundTask(r, func() error {
-					err = h.DB.User().Lock(user.ID)
+					localErr := h.UserRepo.Lock(user.ID)
 
-					if err != nil {
-						log.Printf("Error Locking account due to failed login action: %v", err)
-						return err
+					if localErr != nil {
+						log.Printf("Error Locking account due to failed login action: %v", localErr)
+						return localErr
 					}
 
 					return nil
 				})
 
 				h.Helper.BackgroundTask(r, func() error {
-					_, err = h.DB.Activity().Insert(&repository.ActivityLog{
+					_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
 						UserID:      user.ID,
 						Entity:      repository.ActivityLogUserEntity,
 						EntityId:    user.ID,
 						Description: UserActivityLogLockedAccountDescription,
 					})
 
-					if err != nil {
-						log.Printf("Error logging failed login action: %v", err)
-						return err
+					if localErr != nil {
+						log.Printf("Error logging failed login action: %v", localErr)
+						return localErr
 					}
 
 					return nil
@@ -303,16 +336,17 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.Activity().Insert(&repository.ActivityLog{
+
+		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
 			UserID:      user.ID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,
 			Description: UserActivityLogLoginDescription,
 		})
 
-		if err != nil {
-			log.Printf("Error logging successful login action: %v", err)
-			return err
+		if localErr != nil {
+			log.Printf("Error logging successful login action: %v", localErr)
+			return localErr
 		}
 
 		return nil
@@ -323,10 +357,10 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		emailData["Name"] = user.FirstName + " " + user.LastName
 		emailData["BankName"] = BankName
 
-		err = h.Mailer.Send(user.Email, emailData, "login-alert.tmpl")
-		if err != nil {
-			log.Printf("Error sending login alert: %v", err)
-			return err
+		localErr := h.Mailer.Send(user.Email, emailData, "login-alert.tmpl")
+		if localErr != nil {
+			log.Printf("Error sending login alert: %v", localErr)
+			return localErr
 		}
 
 		return nil
@@ -344,6 +378,7 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	claims.Audiences = []string{h.Config.BaseURL}
 
 	jwtBytes, err := claims.HMACSign(jwt.HS256, []byte(h.Config.Jwt.SecretKey))
+
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -361,7 +396,7 @@ func (h *RouteHandler) HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email     string              `json:"email"`
 		OTP       string              `json:"otp"`
@@ -378,7 +413,7 @@ func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Reques
 
 	input.Validator.Check(validator.NotBlank(input.OTP), "OTP is required")
 
-	user, found, err := h.DB.User().GetByEmail(input.Email)
+	user, found, err := h.UserRepo.GetByEmail(input.Email)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -440,14 +475,17 @@ func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Reques
 	}()
 
 	// update user account to verified
-	err = h.DB.User().Verify(user.ID, tx)
+	err = h.UserRepo.Verify(user.ID, tx)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	// generate  a wallet for the created user
-	wallet, err := h.generateWallet(user.ID, user.PhoneNumber, tx)
+	// generate a wallet for the created user
+	walletHandler := NewWalletHandler(&WalletHandler{
+		WalletRepo: h.WalletRepo,
+	})
+	wallet, err := walletHandler.generateWallet(user.ID, user.PhoneNumber, tx)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -464,26 +502,26 @@ func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Reques
 		emailData["AccountNumber"] = wallet.AccountNumber
 		emailData["BankName"] = BankName
 
-		err = h.Mailer.Send(user.Email, emailData, "welcome-email.tmpl")
-		if err != nil {
-			log.Printf("Error send welcome email: %v", err)
-			return err
+		localErr := h.Mailer.Send(user.Email, emailData, "welcome-email.tmpl")
+		if localErr != nil {
+			log.Printf("Error send welcome email: %v", localErr)
+			return localErr
 		}
 
 		return nil
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.Activity().Insert(&repository.ActivityLog{
+		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
 			UserID:      user.ID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,
 			Description: UserActivityLogAccountVerifiedDescription,
 		})
 
-		if err != nil {
-			log.Printf("Error logging account verification action: %v", err)
-			return err
+		if localErr != nil {
+			log.Printf("Error logging account verification action: %v", localErr)
+			return localErr
 		}
 
 		return nil
@@ -493,7 +531,7 @@ func (h *RouteHandler) HandleVerifyAccount(w http.ResponseWriter, r *http.Reques
 	err = response.JSONOkResponse(w, nil, message, nil)
 }
 
-func (h *RouteHandler) HandleResendVerificationOTP(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) HandleResendVerificationOTP(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email     string              `json:"email"`
 		Validator validator.Validator `json:"-"`
@@ -507,7 +545,7 @@ func (h *RouteHandler) HandleResendVerificationOTP(w http.ResponseWriter, r *htt
 	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
 	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
 
-	user, found, err := h.DB.User().GetByEmail(input.Email)
+	user, found, err := h.UserRepo.GetByEmail(input.Email)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -542,7 +580,7 @@ func (h *RouteHandler) HandleResendVerificationOTP(w http.ResponseWriter, r *htt
 	}
 }
 
-func (h *RouteHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email     string              `json:"email"`
 		Validator validator.Validator `json:"-"`
@@ -556,7 +594,7 @@ func (h *RouteHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Reque
 	input.Validator.Check(validator.NotBlank(input.Email), "Email is required")
 	input.Validator.Check(validator.IsEmail(input.Email), "Must be a valid email address")
 
-	user, found, err := h.DB.User().GetByEmail(input.Email)
+	user, found, err := h.UserRepo.GetByEmail(input.Email)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -605,7 +643,7 @@ func (h *RouteHandler) HandleForgotPassword(w http.ResponseWriter, r *http.Reque
 
 }
 
-func (h *RouteHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email     string              `json:"email"`
 		Password  string              `json:"password"`
@@ -634,7 +672,7 @@ func (h *RouteHandler) HandleResetPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	user, found, err := h.DB.User().GetByEmail(input.Email)
+	user, found, err := h.UserRepo.GetByEmail(input.Email)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -678,7 +716,7 @@ func (h *RouteHandler) HandleResetPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = h.DB.User().UpdatePassword(user.ID, hashedPassword)
+	err = h.UserRepo.UpdatePassword(user.ID, hashedPassword)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -689,26 +727,26 @@ func (h *RouteHandler) HandleResetPassword(w http.ResponseWriter, r *http.Reques
 		emailData["Name"] = user.FirstName + " " + user.LastName
 		emailData["BankName"] = BankName
 
-		err = h.Mailer.Send(user.Email, emailData, "password-reset.tmpl")
-		if err != nil {
-			log.Printf("Error sending password reset email: %v", err)
-			return err
+		localErr := h.Mailer.Send(user.Email, emailData, "password-reset.tmpl")
+		if localErr != nil {
+			log.Printf("Error sending password reset email: %v", localErr)
+			return localErr
 		}
 
 		return nil
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.Activity().Insert(&repository.ActivityLog{
+		_, localErr := h.ActivityRepo.Insert(&repository.ActivityLog{
 			UserID:      user.ID,
 			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,
 			Description: UserActivityLogPasswordResetDescription,
 		})
 
-		if err != nil {
-			log.Printf("Error logging password reset action: %v", err)
-			return err
+		if localErr != nil {
+			log.Printf("Error logging password reset action: %v", localErr)
+			return localErr
 		}
 
 		return nil

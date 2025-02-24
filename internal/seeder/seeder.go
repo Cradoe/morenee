@@ -4,16 +4,15 @@ import (
 	"time"
 
 	"github.com/cradoe/morenee/internal/repository"
-	database "github.com/cradoe/morenee/internal/repository"
 )
 
 const defaultTimeout = 5 * time.Second
 
 type Seeder struct {
-	DB repository.Database
+	DB *repository.DB
 }
 
-func New(DB database.Database) *Seeder {
+func New(DB *repository.DB) *Seeder {
 	return &Seeder{
 		DB: DB,
 	}

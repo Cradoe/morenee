@@ -12,10 +12,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cradoe/morenee/internal/cache"
 	"github.com/cradoe/morenee/internal/context"
-	database "github.com/cradoe/morenee/internal/repository"
+	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
+	"github.com/cradoe/morenee/internal/stream"
 	"github.com/cradoe/morenee/internal/validator"
 )
 
@@ -76,7 +80,33 @@ type TransactionResponseData struct {
 	Recipient       MiniUserWithWallet `json:"recipient"`
 }
 
-func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Request) {
+type TransactionHandler struct {
+	TransactionRepo repository.TransactionRepository
+	WalletRepo      repository.WalletRepository
+	KycRepo         repository.KycRepository
+	ActivityRepo    repository.ActivityRepository
+
+	ErrHandler *errHandler.ErrorRepository
+	Cache      *cache.Cache
+	Helper     *helper.HelperRepository
+	Kafka      *stream.KafkaStream
+}
+
+func NewTransactionHandler(handler *TransactionHandler) *TransactionHandler {
+	return &TransactionHandler{
+		TransactionRepo: handler.TransactionRepo,
+		WalletRepo:      handler.WalletRepo,
+		KycRepo:         handler.KycRepo,
+		ActivityRepo:    handler.ActivityRepo,
+
+		ErrHandler: handler.ErrHandler,
+		Cache:      handler.Cache,
+		Helper:     handler.Helper,
+		Kafka:      handler.Kafka,
+	}
+}
+
+func (h *TransactionHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Request) {
 	// To initiate a wallet to wallet transfer, we need to
 	// Check idempotency key and return previous record if idempotency key is found in cache
 	// Verify account PIN
@@ -192,12 +222,12 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	// we want to lookup sender's wallet and recipient's wallet in parallel
 	// this will reduce waiting time for the client
 
-	recipientCh := make(chan *database.Wallet, 1)
-	senderCh := make(chan *database.Wallet, 1)
+	recipientCh := make(chan *repository.Wallet, 1)
+	senderCh := make(chan *repository.Wallet, 1)
 	errCh := make(chan error, 2)
 
 	go func() {
-		recipientWallet, found, err := h.DB.Wallet().FindByAccountNumber(input.AccountNumber)
+		recipientWallet, found, err := h.WalletRepo.FindByAccountNumber(input.AccountNumber)
 
 		if !found {
 			errCh <- fmt.Errorf("recipient_not_found")
@@ -215,7 +245,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	}()
 
 	go func() {
-		senderWallet, found, err := h.DB.Wallet().GetOne(input.SenderWalletID)
+		senderWallet, found, err := h.WalletRepo.GetOne(input.SenderWalletID)
 		if !found {
 			errCh <- fmt.Errorf("wallet_not_found")
 			return
@@ -231,8 +261,8 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 		}
 	}()
 
-	var recipientWallet *database.Wallet
-	var senderWallet *database.Wallet
+	var recipientWallet *repository.Wallet
+	var senderWallet *repository.Wallet
 
 	select {
 	case err := <-errCh:
@@ -274,13 +304,13 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Check sender wallet status
-	if senderWallet.Status != database.WalletActiveStatus {
+	if senderWallet.Status != repository.WalletActiveStatus {
 		response.JSONErrorResponse(w, nil, ErrInActiveSenderAccount.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
 
 	// Check recipient wallet status
-	if recipientWallet.Status != database.WalletActiveStatus {
+	if recipientWallet.Status != repository.WalletActiveStatus {
 		response.JSONErrorResponse(w, nil, ErrInActiveRecipientAccount.Error(), http.StatusUnprocessableEntity, nil)
 		return
 	}
@@ -293,7 +323,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 
 	// check sender kyc to be sure they are at least in kyc level 1
 	var kycLevelIDStr string
-	var senderKycLevel *database.KYCLevel
+	var senderKycLevel *repository.KYCLevel
 	if !sender.KYCLevelID.Valid {
 		response.JSONErrorResponse(w, nil, ErrCompleteProfileSetup.Error(), http.StatusUnprocessableEntity, nil)
 		return
@@ -301,7 +331,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 
 	kycLevelIDStr = fmt.Sprintf("%d", sender.KYCLevelID.Int16)
 
-	level, kycLevelExists, err := h.DB.KYC().GetOne(kycLevelIDStr)
+	level, kycLevelExists, err := h.KycRepo.GetOne(kycLevelIDStr)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 	}
@@ -319,7 +349,7 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Check for daily limit
-	if exceeded, err := h.DB.Transaction().HasExceededDailyLimit(senderWallet.ID, input.Amount, senderKycLevel.DailyTransferLimit); err != nil {
+	if exceeded, err := h.TransactionRepo.HasExceededDailyLimit(senderWallet.ID, input.Amount, senderKycLevel.DailyTransferLimit); err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	} else if exceeded {
@@ -333,20 +363,20 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	// ...
 
 	// Step 5: create a pending transaction and initialize a background worker to handle the rest
-	newTrans := &database.Transaction{
+	newTrans := &repository.Transaction{
 		SenderWalletID:    senderWallet.ID,
 		RecipientWalletID: recipientWallet.ID,
 		Amount:            input.Amount,
 		ReferenceNumber:   generateTransactionRef(),
 		Description:       sql.NullString{String: input.Description, Valid: input.Description != ""},
 	}
-	transactionId, err := h.DB.Transaction().Insert(newTrans, nil)
+	transactionId, err := h.TransactionRepo.Insert(newTrans, nil)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
 	}
 
-	transactionData, found, err := h.DB.Transaction().GetOne(transactionId)
+	transactionData, found, err := h.TransactionRepo.GetOne(transactionId)
 	if !found {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -381,9 +411,9 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.Activity().Insert(&database.ActivityLog{
+		_, err = h.ActivityRepo.Insert(&repository.ActivityLog{
 			UserID:      transferRes.Sender.ID,
-			Entity:      database.ActivityLogTransactionEntity,
+			Entity:      repository.ActivityLogTransactionEntity,
 			EntityId:    transferRes.ID,
 			Description: TransactionActivityLogInitiatedDescription,
 		})
@@ -403,12 +433,12 @@ func (h *RouteHandler) HandleTransferMoney(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (h *RouteHandler) HandleWalletTransactions(w http.ResponseWriter, r *http.Request) {
+func (h *TransactionHandler) HandleWalletTransactions(w http.ResponseWriter, r *http.Request) {
 	walletId := r.PathValue("id")
 
-	var filterOptions = h.retrieveQueryValues(r)
+	var filterOptions = retrieveUrlQueryValues(r)
 
-	transactions, found, err := h.DB.Transaction().FindAllByWalletId(walletId, &database.FilterTransactionsOptions{
+	transactions, found, err := h.TransactionRepo.FindAllByWalletId(walletId, &repository.FilterTransactionsOptions{
 		StartDate:   filterOptions.StartDate,
 		EndDate:     filterOptions.EndDate,
 		SearchQuery: filterOptions.Search,
@@ -441,10 +471,10 @@ func (h *RouteHandler) HandleWalletTransactions(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (h *RouteHandler) HandleTransactionDetails(w http.ResponseWriter, r *http.Request) {
+func (h *TransactionHandler) HandleTransactionDetails(w http.ResponseWriter, r *http.Request) {
 	transactionId := r.PathValue("id")
 
-	transaction, found, err := h.DB.Transaction().GetOne(transactionId)
+	transaction, found, err := h.TransactionRepo.GetOne(transactionId)
 	if !found {
 		h.ErrHandler.NotFound(w, r)
 		return
@@ -466,7 +496,7 @@ func (h *RouteHandler) HandleTransactionDetails(w http.ResponseWriter, r *http.R
 	}
 }
 
-func formTransactionResponseData(transaction *database.TransactionDetails) *TransactionResponseData {
+func formTransactionResponseData(transaction *repository.TransactionDetails) *TransactionResponseData {
 	return &TransactionResponseData{
 		ID:              transaction.ID,
 		ReferenceNumber: transaction.ReferenceNumber,

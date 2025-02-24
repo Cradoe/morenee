@@ -9,9 +9,12 @@ import (
 
 	"github.com/cradoe/gopass"
 	"github.com/cradoe/morenee/internal/context"
-	database "github.com/cradoe/morenee/internal/repository"
+	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/request"
 	"github.com/cradoe/morenee/internal/response"
+	"github.com/cradoe/morenee/internal/smtp"
 	"github.com/cradoe/morenee/internal/validator"
 )
 
@@ -59,7 +62,29 @@ type MiniUserWithWallet struct {
 	Wallet    WalletMiniData `json:"wallet"`
 }
 
-func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request) {
+type UserHandler struct {
+	UserRepo      repository.UserRepository
+	ActivityRepo  repository.ActivityRepository
+	KycRepo       repository.KycRepository
+	NextOfKinRepo repository.NextOfKinRepository
+	ErrHandler    *errHandler.ErrorRepository
+	Mailer        *smtp.Mailer
+	Helper        *helper.HelperRepository
+}
+
+func NewUserHandler(handler *UserHandler) *UserHandler {
+	return &UserHandler{
+		UserRepo:      handler.UserRepo,
+		ActivityRepo:  handler.ActivityRepo,
+		KycRepo:       handler.KycRepo,
+		NextOfKinRepo: handler.NextOfKinRepo,
+		ErrHandler:    handler.ErrHandler,
+		Mailer:        handler.Mailer,
+		Helper:        handler.Helper,
+	}
+}
+
+func (h *UserHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Pin       string              `json:"pin"`
 		Password  string              `json:"password"`
@@ -93,7 +118,7 @@ func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = h.DB.User().ChangePin(user.ID, input.Pin)
+	err = h.UserRepo.ChangePin(user.ID, input.Pin)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -114,9 +139,9 @@ func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Reques
 	})
 
 	h.Helper.BackgroundTask(r, func() error {
-		_, err = h.DB.Activity().Insert(&database.ActivityLog{
+		_, err = h.ActivityRepo.Insert(&repository.ActivityLog{
 			UserID:      user.ID,
-			Entity:      database.ActivityLogUserEntity,
+			Entity:      repository.ActivityLogUserEntity,
 			EntityId:    user.ID,
 			Description: UserActivityLogPinChangeDescription,
 		})
@@ -136,7 +161,7 @@ func (h *RouteHandler) HandleSetAccountPin(w http.ResponseWriter, r *http.Reques
 	}
 
 }
-func (h *RouteHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request) {
 
 	user := context.ContextGetAuthenticatedUser((r))
 
@@ -167,7 +192,7 @@ func (h *RouteHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request)
 	if user.KYCLevelID.Valid {
 		kycLevelIDStr = fmt.Sprintf("%d", user.KYCLevelID.Int16)
 
-		kycLevel, kycLevelExists, err := h.DB.KYC().GetOne(kycLevelIDStr)
+		kycLevel, kycLevelExists, err := h.KycRepo.GetOne(kycLevelIDStr)
 		if err != nil {
 			h.ErrHandler.ServerError(w, r, err)
 		}
@@ -187,7 +212,7 @@ func (h *RouteHandler) HandleUserProfile(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (h *RouteHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		ImageUrl  string              `json:"image_url"`
 		Validator validator.Validator `json:"-"`
@@ -209,7 +234,7 @@ func (h *RouteHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http
 		return
 	}
 
-	err = h.DB.User().ChangeProfilePicture(user.ID, input.ImageUrl)
+	err = h.UserRepo.ChangeProfilePicture(user.ID, input.ImageUrl)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -225,11 +250,11 @@ func (h *RouteHandler) HandleChangeProfilePicture(w http.ResponseWriter, r *http
 	}
 }
 
-func (h *RouteHandler) HandleGetNextOfKin(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) HandleGetNextOfKin(w http.ResponseWriter, r *http.Request) {
 
 	user := context.ContextGetAuthenticatedUser((r))
 
-	nextOfKin, found, err := h.DB.NextOfKin().FindOneByUserID(user.ID)
+	nextOfKin, found, err := h.NextOfKinRepo.FindOneByUserID(user.ID)
 
 	if !found {
 		h.ErrHandler.NotFound(w, r)
@@ -259,7 +284,7 @@ func (h *RouteHandler) HandleGetNextOfKin(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (h *RouteHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email        string              `json:"email"`
 		FirstName    string              `json:"first_name"`
@@ -294,11 +319,11 @@ func (h *RouteHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request
 	user := context.ContextGetAuthenticatedUser((r))
 
 	// check if user has previously added Next of kin
-	existingRecord, found, _ := h.DB.NextOfKin().FindOneByUserID(user.ID)
+	existingRecord, found, _ := h.NextOfKinRepo.FindOneByUserID(user.ID)
 
 	// if yes, then update the existing one
 	if found {
-		_, err = h.DB.NextOfKin().Update(existingRecord.ID, &database.NextOfKin{
+		_, err = h.NextOfKinRepo.Update(existingRecord.ID, &repository.NextOfKin{
 			FirstName:    input.FirstName,
 			LastName:     input.LastName,
 			Email:        input.Email,
@@ -309,7 +334,7 @@ func (h *RouteHandler) HandleAddNextOfKin(w http.ResponseWriter, r *http.Request
 
 	} else {
 		// create a new record
-		_, err = h.DB.NextOfKin().Insert(&database.NextOfKin{
+		_, err = h.NextOfKinRepo.Insert(&repository.NextOfKin{
 			FirstName:    input.FirstName,
 			LastName:     input.LastName,
 			Email:        input.Email,

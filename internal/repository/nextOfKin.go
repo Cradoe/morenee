@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type NextOfKin struct {
@@ -29,10 +27,10 @@ type NextOfKinRepository interface {
 }
 
 type NextOfKinRepositoryImpl struct {
-	db *sqlx.DB
+	db *DB
 }
 
-func NewNextOfKinRepository(db *sqlx.DB) NextOfKinRepository {
+func NewNextOfKinRepository(db *DB) NextOfKinRepository {
 	return &NextOfKinRepositoryImpl{db: db}
 }
 

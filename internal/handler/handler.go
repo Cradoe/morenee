@@ -5,37 +5,16 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cradoe/morenee/internal/cache"
-	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/errHandler"
-	"github.com/cradoe/morenee/internal/file"
-	"github.com/cradoe/morenee/internal/helper"
-	database "github.com/cradoe/morenee/internal/repository"
-	"github.com/cradoe/morenee/internal/smtp"
-	"github.com/cradoe/morenee/internal/stream"
 )
 
 type RouteHandler struct {
-	DB           database.Database
-	Config       *config.Config
-	ErrHandler   *errHandler.ErrorRepository
-	Mailer       *smtp.Mailer
-	Helper       *helper.HelperRepository
-	Kafka        *stream.KafkaStream
-	FileUploader *file.FileUploader
-	Cache        *cache.Cache
+	ErrHandler *errHandler.ErrorRepository
 }
 
 func NewRouteHandler(handler *RouteHandler) *RouteHandler {
 	return &RouteHandler{
-		DB:           handler.DB,
-		ErrHandler:   handler.ErrHandler,
-		Config:       handler.Config,
-		Mailer:       handler.Mailer,
-		Helper:       handler.Helper,
-		Kafka:        handler.Kafka,
-		FileUploader: handler.FileUploader,
-		Cache:        handler.Cache,
+		ErrHandler: handler.ErrHandler,
 	}
 }
 
@@ -47,7 +26,7 @@ type queryStringValues struct {
 	Offset    int
 }
 
-func (h *RouteHandler) retrieveQueryValues(r *http.Request) *queryStringValues {
+func retrieveUrlQueryValues(r *http.Request) *queryStringValues {
 	var queryValues = &queryStringValues{}
 
 	// Parse start_date if provided

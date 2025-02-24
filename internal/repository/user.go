@@ -6,38 +6,19 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/cradoe/morenee/internal/models"
 )
 
 type UserRepository interface {
 	CheckIfPhoneNumberExist(phoneNumber string) (bool, error)
-	Insert(user *User, tx *sqlx.Tx) (string, error)
-	GetOne(id string) (*User, bool, error)
-	GetByEmail(email string) (*User, bool, error)
-	Verify(id string, tx *sqlx.Tx) error
+	Insert(user *models.User, tx *sql.Tx) (string, error)
+	GetOne(id string) (*models.User, bool, error)
+	GetByEmail(email string) (*models.User, bool, error)
+	Verify(id string, tx *sql.Tx) error
 	UpdatePassword(id, password string) error
 	ChangePin(id string, pin string) error
 	ChangeProfilePicture(id string, image string) error
 	Lock(id string) error
-}
-
-type User struct {
-	ID             string         `db:"id"`
-	KYCLevelID     sql.NullInt16  `db:"kyc_level_id"`
-	FirstName      string         `db:"first_name"`
-	LastName       string         `db:"last_name"`
-	PhoneNumber    string         `db:"phone_number"`
-	Image          sql.NullString `db:"image"`
-	Gender         string         `db:"gender"`
-	Email          string         `db:"email"`
-	Status         string         `db:"status"`
-	Pin            sql.NullInt32  `db:"pin"`
-	CreatedAt      time.Time      `db:"created_at"`
-	DeletedAt      sql.NullTime   `db:"deleted_at"`
-	VerifiedAt     sql.NullTime   `db:"verified_at"`
-	HashedPassword string         `db:"hashed_password"`
-
-	// Wallet Wallet `db:"wallet"`
 }
 
 const (
@@ -56,14 +37,14 @@ const (
 )
 
 type UserRepositoryImpl struct {
-	db *sqlx.DB
+	db *DB
 }
 
-func NewUserRepository(db *sqlx.DB) UserRepository {
+func NewUserRepository(db *DB) UserRepository {
 	return &UserRepositoryImpl{db: db}
 }
 
-func (repo *UserRepositoryImpl) Insert(user *User, tx *sqlx.Tx) (string, error) {
+func (repo *UserRepositoryImpl) Insert(user *models.User, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -102,7 +83,7 @@ func (repo *UserRepositoryImpl) Insert(user *User, tx *sqlx.Tx) (string, error) 
 	return id, nil
 }
 
-func (repo *UserRepositoryImpl) Verify(id string, tx *sqlx.Tx) error {
+func (repo *UserRepositoryImpl) Verify(id string, tx *sql.Tx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -141,11 +122,11 @@ func (repo *UserRepositoryImpl) UpdatePassword(id, password string) error {
 	return nil
 }
 
-func (repo *UserRepositoryImpl) GetOne(id string) (*User, bool, error) {
+func (repo *UserRepositoryImpl) GetOne(id string) (*models.User, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var user User
+	var user models.User
 
 	query := `SELECT * FROM users WHERE id = $1`
 
@@ -157,11 +138,11 @@ func (repo *UserRepositoryImpl) GetOne(id string) (*User, bool, error) {
 	return &user, true, err
 }
 
-func (repo *UserRepositoryImpl) GetByEmail(email string) (*User, bool, error) {
+func (repo *UserRepositoryImpl) GetByEmail(email string) (*models.User, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var user User
+	var user models.User
 
 	query := `SELECT * FROM users WHERE email = $1`
 

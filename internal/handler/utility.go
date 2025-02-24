@@ -7,10 +7,24 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/file"
 	"github.com/cradoe/morenee/internal/response"
 )
 
-func (util *RouteHandler) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
+type UtilityHandler struct {
+	FileUploader *file.FileUploader
+	ErrHandler   *errHandler.ErrorRepository
+}
+
+func NewUtilityHandler(handler *UtilityHandler) *UtilityHandler {
+	return &UtilityHandler{
+		FileUploader: handler.FileUploader,
+		ErrHandler:   handler.ErrHandler,
+	}
+}
+
+func (util *UtilityHandler) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseMultipartForm(10 << 20) // 10 MB
 	if err != nil {

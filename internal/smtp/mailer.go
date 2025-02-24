@@ -15,8 +15,15 @@ import (
 
 const defaultTimeout = 10 * time.Second
 
+type MailClient interface {
+	DialAndSend(...*mail.Msg) error
+}
+
+type MailerInterface interface {
+	Send(recipient string, data any, patterns ...string) error
+}
 type Mailer struct {
-	client mail.Client
+	client MailClient
 	from   string
 }
 
@@ -24,7 +31,6 @@ func NewMailer(host string, port int, username, password, from string) (*Mailer,
 	client, err := mail.NewClient(
 		host,
 		mail.WithTimeout(defaultTimeout),
-		// mail.WithSMTPAuth(mail.SMTPAuthLogin),
 		mail.WithPort(port),
 		mail.WithUsername(username),
 		mail.WithPassword(password),
@@ -34,12 +40,10 @@ func NewMailer(host string, port int, username, password, from string) (*Mailer,
 		return nil, err
 	}
 
-	mailer := &Mailer{
-		client: *client,
+	return &Mailer{
+		client: client, // Now using the interface
 		from:   from,
-	}
-
-	return mailer, nil
+	}, nil
 }
 
 func (m *Mailer) Send(recipient string, data any, patterns ...string) error {
@@ -48,13 +52,11 @@ func (m *Mailer) Send(recipient string, data any, patterns ...string) error {
 	}
 	msg := mail.NewMsg()
 
-	err := msg.To(recipient)
-	if err != nil {
+	if err := msg.To(recipient); err != nil {
 		return err
 	}
 
-	err = msg.From(m.from)
-	if err != nil {
+	if err := msg.From(m.from); err != nil {
 		return err
 	}
 
@@ -64,16 +66,14 @@ func (m *Mailer) Send(recipient string, data any, patterns ...string) error {
 	}
 
 	subject := new(bytes.Buffer)
-	err = ts.ExecuteTemplate(subject, "subject", data)
-	if err != nil {
+	if err := ts.ExecuteTemplate(subject, "subject", data); err != nil {
 		return err
 	}
 
 	msg.Subject(subject.String())
 
 	plainBody := new(bytes.Buffer)
-	err = ts.ExecuteTemplate(plainBody, "plainBody", data)
-	if err != nil {
+	if err := ts.ExecuteTemplate(plainBody, "plainBody", data); err != nil {
 		return err
 	}
 
@@ -86,8 +86,7 @@ func (m *Mailer) Send(recipient string, data any, patterns ...string) error {
 		}
 
 		htmlBody := new(bytes.Buffer)
-		err = ts.ExecuteTemplate(htmlBody, "htmlBody", data)
-		if err != nil {
+		if err := ts.ExecuteTemplate(htmlBody, "htmlBody", data); err != nil {
 			return err
 		}
 
@@ -95,9 +94,9 @@ func (m *Mailer) Send(recipient string, data any, patterns ...string) error {
 	}
 
 	for i := 1; i <= 3; i++ {
-		err = m.client.DialAndSend(msg)
+		err := m.client.DialAndSend(msg) // Now calls interface method
 
-		if nil == err {
+		if err == nil {
 			return nil
 		}
 

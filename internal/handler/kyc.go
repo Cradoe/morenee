@@ -3,6 +3,8 @@ package handler
 import (
 	"net/http"
 
+	"github.com/cradoe/morenee/internal/errHandler"
+	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/response"
 )
 
@@ -20,9 +22,22 @@ type KYCRequirementResponseData struct {
 	Requirement string `json:"requirement"`
 }
 
-func (h *RouteHandler) HandleKYCs(w http.ResponseWriter, r *http.Request) {
+type KycHandler struct {
+	KycRepo repository.KycRepository
 
-	KYCS, err := h.DB.KYC().GetAll()
+	ErrHandler *errHandler.ErrorRepository
+}
+
+func NewKycHandler(handler *KycHandler) *KycHandler {
+	return &KycHandler{
+		KycRepo:    handler.KycRepo,
+		ErrHandler: handler.ErrHandler,
+	}
+}
+
+func (h *KycHandler) HandleKYCs(w http.ResponseWriter, r *http.Request) {
+
+	KYCS, err := h.KycRepo.GetAll()
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return
@@ -65,10 +80,10 @@ func (h *RouteHandler) HandleKYCs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *RouteHandler) HandleSingleYC(w http.ResponseWriter, r *http.Request) {
+func (h *KycHandler) HandleSingleYC(w http.ResponseWriter, r *http.Request) {
 	kycID := r.PathValue("id")
 
-	result, found, err := h.DB.KYC().GetOne(kycID)
+	result, found, err := h.KycRepo.GetOne(kycID)
 	if err != nil {
 		h.ErrHandler.ServerError(w, r, err)
 		return

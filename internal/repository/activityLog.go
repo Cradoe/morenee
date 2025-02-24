@@ -12,8 +12,6 @@ import (
 	"database/sql"
 	"errors"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type ActivityRepository interface {
@@ -42,10 +40,10 @@ const (
 )
 
 type ActivityRepositoryImpl struct {
-	db *sqlx.DB
+	db *DB
 }
 
-func NewActivityRepository(db *sqlx.DB) ActivityRepository {
+func NewActivityRepository(db *DB) ActivityRepository {
 	return &ActivityRepositoryImpl{db: db}
 }
 

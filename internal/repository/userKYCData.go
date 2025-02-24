@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type KYCData struct {
@@ -27,10 +25,10 @@ type UserKycDataRepository interface {
 }
 
 type UserKycDataRepositoryImpl struct {
-	db *sqlx.DB
+	db *DB
 }
 
-func NewUserKycDataRepository(db *sqlx.DB) UserKycDataRepository {
+func NewUserKycDataRepository(db *DB) UserKycDataRepository {
 	return &UserKycDataRepositoryImpl{db: db}
 }
 

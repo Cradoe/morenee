@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type Wallet struct {
@@ -27,7 +25,7 @@ const (
 )
 
 type WalletRepository interface {
-	Insert(wallet *Wallet, tx *sqlx.Tx) (string, error)
+	Insert(wallet *Wallet, tx *sql.Tx) (string, error)
 	Balance(id string) (*Wallet, error)
 	GetAllByUserId(userID string) ([]Wallet, bool, error)
 	GetOne(id string) (*Wallet, bool, error)
@@ -38,14 +36,14 @@ type WalletRepository interface {
 }
 
 type WalletRepositoryImpl struct {
-	db *sqlx.DB
+	db *DB
 }
 
-func NewWalletRepository(db *sqlx.DB) WalletRepository {
+func NewWalletRepository(db *DB) WalletRepository {
 	return &WalletRepositoryImpl{db: db}
 }
 
-func (repo *WalletRepositoryImpl) Insert(wallet *Wallet, tx *sqlx.Tx) (string, error) {
+func (repo *WalletRepositoryImpl) Insert(wallet *Wallet, tx *sql.Tx) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 

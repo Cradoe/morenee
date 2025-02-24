@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 
 	"github.com/cradoe/morenee/internal/app"
+	"github.com/cradoe/morenee/internal/repository"
 	seeders "github.com/cradoe/morenee/internal/seeder"
 	"github.com/cradoe/morenee/internal/version"
 	"github.com/cradoe/morenee/internal/worker"
@@ -60,9 +61,20 @@ func run(logger *slog.Logger) error {
 	defer cancel()
 
 	// Start workers
+	userRepo := repository.NewUserRepository(application.DB)
+	transactionRepo := repository.NewTransactionRepository(application.DB)
+	walletRepo := repository.NewWalletRepository(application.DB)
+	kycRepo := repository.NewKycRepository(application.DB)
+	activityRepo := repository.NewActivityRepository(application.DB)
+
 	wk := worker.New(&worker.Worker{
+		UserRepo:        userRepo,
+		TransactionRepo: transactionRepo,
+		WalletRepo:      walletRepo,
+		KycRepo:         kycRepo,
+		ActivityRepo:    activityRepo,
+
 		KafkaStream: application.Kafka,
-		DB:          application.DB,
 		Ctx:         ctx,
 		Helper:      application.Helper,
 		Mailer:      application.Mailer,

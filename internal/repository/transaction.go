@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/cradoe/morenee/internal/models"
 )
 
 type Transaction struct {
@@ -22,8 +22,8 @@ type Transaction struct {
 	CreatedAt         time.Time      `db:"created_at"`
 	UpdatedAt         sql.NullTime   `db:"updated_at"`
 
-	Sender    User `db:"sender"`
-	Recipient User `db:"recipient"`
+	Sender    models.User `db:"sender"`
+	Recipient models.User `db:"recipient"`
 }
 type TransactionDetails struct {
 	ID              string       `db:"id"`
@@ -57,10 +57,10 @@ type TransactionRepository interface {
 }
 
 type TransactionRepositoryImpl struct {
-	db *sqlx.DB
+	db *DB
 }
 
-func NewTransactionRepository(db *sqlx.DB) TransactionRepository {
+func NewTransactionRepository(db *DB) TransactionRepository {
 	return &TransactionRepositoryImpl{db: db}
 }
 

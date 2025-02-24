@@ -11,7 +11,7 @@ import (
 	"github.com/cradoe/morenee/internal/errHandler"
 	"github.com/cradoe/morenee/internal/file"
 	"github.com/cradoe/morenee/internal/helper"
-	database "github.com/cradoe/morenee/internal/repository"
+	"github.com/cradoe/morenee/internal/repository"
 	"github.com/cradoe/morenee/internal/smtp"
 	"github.com/cradoe/morenee/internal/stream"
 	"github.com/joho/godotenv"
@@ -21,7 +21,7 @@ import (
 // this makes it possible for methods to have access to these items and when they need them
 type Application struct {
 	Config       config.Config
-	DB           database.Database
+	DB           *repository.DB
 	Cache        *cache.Cache
 	Logger       *slog.Logger
 	Mailer       *smtp.Mailer
@@ -67,7 +67,7 @@ func NewApplication(logger *slog.Logger) (*Application, error) {
 
 	cfg.RedisServer = env.GetString("REDIS_SERVER", "localhost:6379")
 
-	db, err := database.New(cfg.Db.Dsn, cfg.Db.Automigrate)
+	db, err := repository.New(cfg.Db.Dsn, cfg.Db.Automigrate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}

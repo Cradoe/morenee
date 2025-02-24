@@ -3,8 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type KYCLevelRequirement struct {
@@ -17,10 +15,10 @@ type KycRequirementRepository interface {
 }
 
 type KycRequirementRepositoryImpl struct {
-	db *sqlx.DB
+	db *DB
 }
 
-func NewKycRequirementRepository(db *sqlx.DB) KycRequirementRepository {
+func NewKycRequirementRepository(db *DB) KycRequirementRepository {
 	return &KycRequirementRepositoryImpl{db: db}
 }
 

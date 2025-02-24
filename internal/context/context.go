@@ -8,7 +8,7 @@ import (
 	"context"
 	"net/http"
 
-	database "github.com/cradoe/morenee/internal/repository"
+	"github.com/cradoe/morenee/internal/models"
 )
 
 type contextKey string
@@ -17,13 +17,13 @@ const (
 	authenticatedUserContextKey = contextKey("authenticatedUser")
 )
 
-func ContextSetAuthenticatedUser(r *http.Request, user *database.User) *http.Request {
+func ContextSetAuthenticatedUser(r *http.Request, user *models.User) *http.Request {
 	ctx := context.WithValue(r.Context(), authenticatedUserContextKey, user)
 	return r.WithContext(ctx)
 }
 
-func ContextGetAuthenticatedUser(r *http.Request) *database.User {
-	user, ok := r.Context().Value(authenticatedUserContextKey).(*database.User)
+func ContextGetAuthenticatedUser(r *http.Request) *models.User {
+	user, ok := r.Context().Value(authenticatedUserContextKey).(*models.User)
 	if !ok {
 		return nil
 	}
