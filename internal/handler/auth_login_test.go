@@ -2,109 +2,24 @@ package handler
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 
-	"github.com/cradoe/morenee/internal/config"
 	"github.com/cradoe/morenee/internal/helper"
+	"github.com/cradoe/morenee/internal/mocks"
 	"github.com/cradoe/morenee/internal/models"
 	"github.com/cradoe/morenee/internal/repository"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-// MockUserRepo implements UserRepository but only mocks the needed methods.
-type MockUserRepo struct {
-	mock.Mock
-}
-
-func (m *MockUserRepo) CheckIfPhoneNumberExist(phoneNumber string) (bool, error) {
-	return false, nil
-}
-
-func (m *MockUserRepo) Insert(user *models.User, tx *sql.Tx) (string, error) {
-	return "", nil
-}
-
-func (m *MockUserRepo) GetOne(id string) (*models.User, bool, error) {
-	return nil, false, nil
-}
-
-func (m *MockUserRepo) GetByEmail(email string) (*models.User, bool, error) {
-	args := m.Called(email)
-	return args.Get(0).(*models.User), args.Bool(1), args.Error(2)
-}
-
-func (m *MockUserRepo) Verify(id string, tx *sql.Tx) error {
-	return nil
-}
-
-func (m *MockUserRepo) UpdatePassword(id, password string) error {
-	return nil
-}
-
-func (m *MockUserRepo) ChangePin(id, pin string) error {
-	return nil
-}
-
-func (m *MockUserRepo) ChangeProfilePicture(id, image string) error {
-	return nil
-}
-
-func (m *MockUserRepo) Lock(id string) error {
-	return nil
-}
-
-type MockActivityRepo struct {
-	mock.Mock
-}
-
-func (m *MockActivityRepo) CountConsecutiveFailedLoginAttempts(userID, action_desc string) int {
-	return 0
-}
-
-func (m *MockActivityRepo) Insert(log *repository.ActivityLog) (*repository.ActivityLog, error) {
-	args := m.Called(log)
-	return args.Get(0).(*repository.ActivityLog), args.Error(1)
-}
-
-type MockHelper struct{}
-
-func (m *MockHelper) BackgroundTask(r *http.Request, fn func() error) {
-	go func() {
-		err := fn()
-		if err != nil {
-			log.Printf("Background task error: %v", err)
-		}
-	}()
-}
-
-// MockErrorHandler simulates error handling inside HelperRepository.
-type MockErrorHandler struct{}
-
-func (m *MockErrorHandler) ReportServerError(r *http.Request, err error) {
-	log.Printf("Mock Error Handler: %v", err)
-}
-
-type MockMailer struct {
-	mock.Mock
-}
-
-func (m *MockMailer) Send(recipient string, data any, patterns ...string) error {
-	args := m.Called(recipient, data, patterns)
-	return args.Error(0)
-}
-
 func TestHandleAuthLogin_ValidCredentials(t *testing.T) {
-	// Arrange
-	mockUserRepo := new(MockUserRepo)
-	mockActivityRepo := new(MockActivityRepo)
-	mockMailer := new(MockMailer)
+	mockUserRepo := new(mocks.MockUserRepo)
+	mockActivityRepo := new(mocks.MockActivityRepo)
+	mockMailer := new(mocks.MockMailer)
 
 	var baseURL string = "http://localhost"
 	var wg sync.WaitGroup
@@ -122,50 +37,12 @@ func TestHandleAuthLogin_ValidCredentials(t *testing.T) {
 	mockUserRepo.On("GetByEmail", "test@example.com").Return(testUser, true, nil)
 	mockActivityRepo.On("Insert", mock.Anything).Return(&repository.ActivityLog{}, nil)
 
-	// ✅ Add mock Config
-	mockConfig := &config.Config{
-		BaseURL:  "http://localhost",
-		HttpPort: 8080,
-		Db: struct {
-			Dsn         string
-			Automigrate bool
-		}{
-			Dsn:         "mock_dsn",
-			Automigrate: false,
-		},
-		RedisServer: "localhost:6379",
-		Jwt: struct {
-			SecretKey string
-		}{
-			SecretKey: "test_secret",
-		},
-		Notifications: struct {
-			Email string
-		}{
-			Email: "no-reply@example.com",
-		},
-		Smtp: struct {
-			Host     string
-			Port     int
-			Username string
-			Password string
-			From     string
-		}{
-			Host:     "smtp.example.com",
-			Port:     587,
-			Username: "user@example.com",
-			Password: "password",
-			From:     "no-reply@example.com",
-		},
-		KafkaServers: "localhost:9092",
-	}
-
 	authHandler := &AuthHandler{
 		UserRepo:     mockUserRepo,
 		ActivityRepo: mockActivityRepo,
 		Helper:       mockHelper,
 		Mailer:       mockMailer,
-		Config:       mockConfig, // ✅ Include Config
+		Config:       mocks.MockConfig,
 	}
 
 	requestBody, _ := json.Marshal(map[string]string{
